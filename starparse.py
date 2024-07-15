@@ -75,7 +75,7 @@ class StarFile:
 	def dataframe_to_star_block(self, df):
 		columns = df.columns.tolist()
 		header_line = self.build_header_line(columns)
-		data_block = df.to_string(header=False, index=False, col_space=12, formatters=self.formatter())
+		data_block = df.to_string(header=False, index=False, col_space=12, formatters=self.formatter(), float_format='%.6f')
 		return header_line + data_block + '\n'
 
 	def build_header_line(self, columns):

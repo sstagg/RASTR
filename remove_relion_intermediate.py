@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 # To remove relion jobs' intermediate files, only map end with .mrc(s) will be removed.
-# Rewrite by chatgpt
 import os
 import sys
 

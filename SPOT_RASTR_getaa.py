@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+### modified from RASTR_tube.py to specifically making azimuthal average for SPOT-RASTR
+
 import tkinter as tk
 import tkinter.scrolledtext as st
 from tkinter import ttk
@@ -18,6 +20,7 @@ import math
 from starparse import StarFile
 import pandas as pd
 from PIL import Image, ImageEnhance
+
 
 
 
@@ -292,7 +295,7 @@ def angle_within360( angle ):
 		return angle
 	
 def find_peak( array_1d, min_gap=80):
-	peak_one, peak_two = find_peak_2( array_1d, min_gap)
+	peak_one, peak_two = find_peak_1( array_1d, min_gap)
 	#peak_one, peak_two = find_peak_2( array_1d, min_gap)
 	#if abs(peak_one - peak_two) < min_gap:
 		#peak_one, peak_two = find_peak_1( array_1d, min_gap)
@@ -1215,6 +1218,7 @@ def main():
 		threshold_window = choose_threshold_window( starfile.particles_df )
 		starfile.particles_df = threshold_window.particles_df
 
+	### optimize parameters first
 	if results.find_psi:
 		optimizer_psi = optimize_angle_finding( starfile )
 		optimizer_psi.start_window()
@@ -1250,8 +1254,6 @@ def main():
 	if results.minimize_shift:
 		shifts = [ minimize_shift( starfile.particles_df.iloc[line_number], min_gap) for line_number in range(starfile.particles_df.shape[0])]
 		xshifts, yshifts = zip(*shifts)
-		print(xshifts)
-		print(yshifts)
 		starfile.particles_df['_rlnOriginXAngst'] = xshifts
 		starfile.particles_df['_rlnOriginYAngst'] = yshifts
 		particles_df = starfile.particles_df

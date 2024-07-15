@@ -31,10 +31,10 @@ def main():
     with mrcfile.mmap(mrcsfile, mode='r') as imagestack:
 	    slice_number = imagestack.data.shape[0]
 	
-    slice_number = 13822
+    
     if slice_number != len(particles_df):
         print('The number of particles in star does not match the number of slices in the mrcs file')
-        sys.exit(1)
+        #sys.exit(1)
 
     rmsds = 0
     rmsd_list = []
@@ -48,11 +48,14 @@ def main():
         image_array = cp.asarray(image_array)
         image_array = rotate_image(image_array, psi, x, y)
         image_projection = cp.sum(image_array, axis=1)
+        #plt.plot(image_projection.get())
+        #plt.show()
         image_mean = cp.mean(image_projection)
         rmsd = cp.sqrt(cp.sum(cp.square(image_projection - image_mean)))
         rmsds += rmsd
         rmsd_list.append(rmsd.get())
-    rmsds /= slice_number
+    rmsds /= len(particles_df)
+    print('The number of particles is: ', len(particles_df))
     print('The average rmsd is: ', rmsds)
     plt.hist(rmsd_list, bins=100)
     plt.show()

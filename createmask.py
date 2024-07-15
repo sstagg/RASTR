@@ -43,8 +43,8 @@ def wedge():
 
 
 def sphere():
-	boxsize=128
-	center=64
+	boxsize=250
+	center=314
 	radius=int(sys.argv[1])
 	a=np.zeros((boxsize,boxsize,boxsize))
 

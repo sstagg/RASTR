@@ -17,27 +17,32 @@ def parserInput(args):
 	parser.add_argument('-psi','--anglepsi',action='store',default=None,dest='Psi')
 	parser.add_argument('-x','--shiftx',action='store',default=None,dest='X')
 	parser.add_argument('-y','--shifty',action='store',default=None, dest='Y')
-	parser.add_argument('--remove', action='store', default=None, dest='remove')
+	parser.add_argument('--remove', action='store', default=None, dest='remove', help="comma separated list of columns to remove (_rlnAnglePsi)")
+	parser.add_argument('--optic', action='store', default=1, dest='opticgroup')
 	return parser.parse_args(args)
 
 # mapping from command line arguments to star file column names
-arg_to_column = {
-	"micrograph": "_rlnMicrographName",
-	"image": "_rlnImageName",
-	"mag": "_rlnMagnification",
-	"Rot": "_rlnAngleRot",
-	"Tilt": "_rlnAngleTilt",
-	"Psi": "_rlnAnglePsi",
-	"X": "_rlnOriginXAngst",
-	"Y": "_rlnOriginYAngst",
-}
+
 
 def change_star_file_values(args):
+	arg_to_column = {
+		"micrograph": "_rlnMicrographName",
+		"image": "_rlnImageName",
+		"mag": "_rlnMagnification",
+		"Rot": "_rlnAngleRot",
+		"Tilt": "_rlnAngleTilt",
+		"Psi": "_rlnAnglePsi",
+		"X": "_rlnOriginXAngst",
+		"Y": "_rlnOriginYAngst",
+		"class" : "_rlnClassNumber",
+		"opticgroup" : "_rlnOpticsGroup",
+		
+		}
 	parsed_args = parserInput(args)
 	star_file = StarFile(parsed_args.input)
 
 	if parsed_args.remove is not None:
-		columns_to_remove = [star_file.particles_df.columns[int(i)-1] for i in parsed_args.remove.split(',')]
+		columns_to_remove = parsed_args.remove.split(',')
 		star_file.particles_df = star_file.particles_df.drop(columns=columns_to_remove)
 
 	for arg, value in vars(parsed_args).items():
@@ -49,6 +54,9 @@ def change_star_file_values(args):
 				star_file.particles_df[column] = new_image_name
 
 			elif arg == 'micrograph':
+				star_file.particles_df[column] = value
+
+			elif arg == 'opticgroup':
 				star_file.particles_df[column] = value
 
 			elif arg in ['Rot', 'Tilt', 'Psi', 'X', 'Y']:

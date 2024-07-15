@@ -90,9 +90,9 @@ class ShowStack:
 
 		self.button_random = tk.Button(self.frame_controls, text='R', command=self.random_slice, padx=1, pady=1)
 		self.button_random.pack(side=tk.LEFT, padx=(0,1))
-		self.button_left = tk.Button(self.frame_controls, text="\u25C0", command=self.previous_slice, padx=1, pady=1)
+		self.button_left = tk.Button(self.frame_controls, text="pre", command=self.previous_slice, padx=1, pady=1)
 		self.button_left.pack(side=tk.LEFT, padx=(0,1))
-		self.button_right = tk.Button(self.frame_controls, text="\u25B6", command=self.next_slice, padx=1, pady=1)
+		self.button_right = tk.Button(self.frame_controls, text="next", command=self.next_slice, padx=1, pady=1)
 		self.button_right.pack(side=tk.LEFT, padx=(0,1))
 
 
