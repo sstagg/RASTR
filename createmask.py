@@ -5,19 +5,20 @@ from scipy.ndimage import gaussian_filter
 import sys
 
 def cylinder():
-	size=608
+	size=500
 	a=np.zeros((size,size,size))
-	radius=91
-	center=303.5
-
-	x, y, z = np.indices((size, size, size))
-	mask = ((x-center)**2 + (y-size/2+0.5)**2 < radius**2)
+	radius=185
+	center=250
+	height = 75
+	z, y, x = np.indices((size, size, size))
+	mask = (((x-center)**2 + (y-size/2+0.5)**2 < radius**2) & (z > size/2 +0.5 - height*0.5) & (z < size/2 +0.5 + height*0.5))
 	a[mask] = 1.0
 
 	a=gaussian_filter(a,sigma=3)
 	a = np.clip(a, 0, 1)
 	
 	with mrcfile.new('cylindermask_radius{}_center{}_size{}.mrc'.format(radius, center, size)) as mrc:
+		a = a.astype(np.float32)
 		mrc.set_data(a)
 
 
@@ -43,9 +44,9 @@ def wedge():
 
 
 def sphere():
-	boxsize=250
-	center=314
-	radius=int(sys.argv[1])
+	boxsize=480
+	center=int(sys.argv[1])
+	radius=int(sys.argv[2])
 	a=np.zeros((boxsize,boxsize,boxsize))
 
 	z, y, x = np.indices((boxsize, boxsize, boxsize))
@@ -83,4 +84,4 @@ def rectangular():
 		mrc.set_data(a)
 
 sphere()
-
+#cylinder()

@@ -166,9 +166,9 @@ def relionmask(angle, whitemaskfile, maskprojectionfile, angpix, gauss, initial_
 	with mrcfile.new_mmap(newfile, shape=mrcsshape, mrc_mode=2, overwrite=True) as mrcobj:
 		for linenumber, particle in particles_df.iterrows():
 			image = particle['_rlnImageName'].split('@')
-			i = int(image[0])
-			mask_image = mask_particles_df.iloc[linenumber]['_rlnImageName'].split('@')
 			
+			mask_image = mask_particles_df.iloc[linenumber]['_rlnImageName'].split('@')
+			i = int(mask_image[0])
 			singleslice = readslice(image)
 			maskslice = readslice(mask_image)
 

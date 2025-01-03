@@ -26,6 +26,8 @@ def get_particle_correlations(particles_df):
         # print out the progress
         print(f'Processing particle {i} of {num_particles}...', end='\r')
         image_info = particle_row['_rlnImageName'].split('@')
+        x = float( particle['_rlnOriginXAngst']) / pixel_size
+        y = float( particle['_rlnOriginYAngst']) / pixel_size
         image_array_1 = slices[int(image_info[0])-1]
         max_correlation = -np.inf
         max_j = -1

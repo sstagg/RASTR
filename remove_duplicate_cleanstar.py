@@ -3,16 +3,16 @@
 from starparse import StarFile
 import pandas as pd
 from matplotlib import pyplot as plt
-
+import sys
 
 
 def main():
-    reader = pd.read_csv('repeatsj17.csv')
+    reader = pd.read_csv(sys.argv[1])
     repeat_list = [int(x) for x in reader.iloc[:,0].tolist()]
     #print (repeat_list)
     
     #read star file
-    star_file = StarFile('refinej17.star')
+    star_file = StarFile(sys.argv[2])
     particles_df = star_file.particles_df
     optics_df = star_file.optics_df
     pixel_size = float(optics_df.loc[0,'_rlnImagePixelSize'])
@@ -29,7 +29,7 @@ def main():
     #print (len(index_to_delete))
 
     star_file.particles_df = particles_df
-    star_file.write('j17cleaned.star')
+    star_file.write(sys.argv[3])
     
     pass
 

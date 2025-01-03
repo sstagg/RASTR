@@ -292,10 +292,12 @@ def angle_within360( angle ):
 		return angle
 	
 def find_peak( array_1d, min_gap=80):
-	peak_one, peak_two = find_peak_2( array_1d, min_gap)
+	#Strategy two works best for protein decorated liposome
 	#peak_one, peak_two = find_peak_2( array_1d, min_gap)
-	#if abs(peak_one - peak_two) < min_gap:
-		#peak_one, peak_two = find_peak_1( array_1d, min_gap)
+	
+	#strategy one works best for GalCer, especially SPOT_RASTR
+	peak_one, peak_two = find_peak_1(array_1d, min_gap)
+	
 	return peak_one, peak_two
 
 ### Find the highest two peaks. min_gap defines the minimum distance of this two peaks
@@ -955,32 +957,32 @@ class choose_threshold_window:
 		self.coords_label['text'] = f'x={x:.2f}, y={y:.2f}'
 
 
-def minimize_shift( particle, min_gap ):
+def minimize_shift( particle, sigma, min_gap ):
 	image = particle['_rlnImageName'].split('@')
 	psi = particle['_rlnAnglePsi']
 
 	image_array = readslice(image)
-	image_array = gaussian_filter( image_array, 2)
+	image_array = gaussian_filter( image_array, sigma)
 	image_array_rotated = rotate_image( image_array, psi=psi, x=0, y=0, order=3)
 	image_projection = cp.sum(image_array_rotated, axis=1)
-	peak_one, peak_two = find_peak( image_projection )
+	peak_one, peak_two = find_peak( image_projection, min_gap )
 
 	distance = (peak_one + peak_two)/2 - image_array_rotated.shape[1]//2
 	x = -distance * math.sin( psi/180.0*math.pi )
 	y = -distance * math.cos( psi/180.0*math.pi )
 
-	image_array_rotated = rotate_image( image_array, psi=psi, x=x, y=y, order=3)
-	image_array_vertical = rotate_image( image_array_rotated, psi=-90, order=3)
-	image_projection = cp.sum(image_array_rotated, axis=1)
-	peak_one, peak_two = find_peak( image_projection, min_gap )
-	distance_after = abs( (peak_one + peak_two)/2 - image_array_rotated.shape[1]//2)
+	#image_array_rotated = rotate_image( image_array, psi=psi, x=x, y=y, order=3)
+	#image_array_vertical = rotate_image( image_array_rotated, psi=-90, order=3)
+	#image_projection = cp.sum(image_array_rotated, axis=1)
+	#peak_one, peak_two = find_peak( image_projection, min_gap )
+	#distance_after = abs( (peak_one + peak_two)/2 - image_array_rotated.shape[1]//2)
 
-	if  distance_after >0:
+	#if  distance_after >0:
 		#print (image,' distance: ', distance_after)
 		#image_array_vertical[240][240] = 9
 		#pyplot.imshow(image_array_vertical.get(), origin='lower', cmap='gray')
 		#pyplot.show()
-		pass
+	#	pass
 
 
 	return x*pixel_size , y*pixel_size
@@ -1248,10 +1250,10 @@ def main():
 		
 
 	if results.minimize_shift:
-		shifts = [ minimize_shift( starfile.particles_df.iloc[line_number], min_gap) for line_number in range(starfile.particles_df.shape[0])]
+		shifts = [ minimize_shift( starfile.particles_df.iloc[line_number], sigma, min_gap) for line_number in range(starfile.particles_df.shape[0])]
 		xshifts, yshifts = zip(*shifts)
-		print(xshifts)
-		print(yshifts)
+		#print(xshifts)
+		#print(yshifts)
 		starfile.particles_df['_rlnOriginXAngst'] = xshifts
 		starfile.particles_df['_rlnOriginYAngst'] = yshifts
 		particles_df = starfile.particles_df
@@ -1260,10 +1262,14 @@ def main():
 	if results.showaverage:
 		average = get_average( optics_df, particles_df )
 		model_2d = average
+		average_name = results.output_rootname + '_average.mrc'
 		pyplot.clf()
-		with mrcfile.new('testtemplate.mrc', overwrite=True) as f:
+		with mrcfile.new(average_name, overwrite=True) as f:
 			f.set_data( average.get().astype('float32'))
 		pyplot.imshow(average.get(), origin='lower', cmap='gray')
+		pyplot.show()
+
+		pyplot.plot(cp.sum(average, axis=1).get())
 		pyplot.show()
 
 	if results.subtraction:

@@ -19,9 +19,10 @@ invol = sys.argv[1]
 outvol = invol.split('.')[0]+'azavg.mrc'
 parse = parse(sys.argv[2:])
 
-
-vol = mrcfile.read(invol)
-vol = vol.astype(numpy.float32)
+with mrcfile.open(invol) as mrc:
+	vol = mrc.data
+	vol = vol.astype(numpy.float32)
+	pixel_size = mrc.voxel_size
 if parse.mask:
 	maskvol = mrcfile.read(parse.mask)
 	if maskvol.shape != vol.shape:
@@ -43,10 +44,12 @@ if parse.mask:
 		nvol = nvol.astype(numpy.float32)
 		mrcfile.write(outvol, data=nvol)		
 else:
-	zavg = numpy.average(vol[int(0.1*vol.shape[0]):int(0.9*vol.shape[0])][:][:], axis=0)
+	zavg = numpy.average(vol[int(0.15*vol.shape[0]):int(0.85*vol.shape[0])][:][:], axis=0)
 	cylavg = numpy.zeros(vol.shape)
 	for n in range(vol.shape[0]):
 		cylavg[n] = zavg
 	cylavg = cylavg.astype(numpy.float32)
-	mrcfile.write(outvol, data=cylavg)
+	with mrcfile.new(outvol) as mrc:
+		mrc.set_data(cylavg)
+		mrc.voxel_size = pixel_size
 

@@ -116,6 +116,7 @@ class ShowStack:
 		self.rotate_yes.set(False)
 		self.C_rotate = ttk.Checkbutton(self.frame_controls, text='rotate', command=self.update_plot, variable=self.rotate_yes)
 		self.C_rotate.pack(side=tk.LEFT, padx=1)
+	
 
 		self.button_update = ttk.Button(self.frame_controls, text="Update", command=self.update_variable)
 		self.button_update.pack(side=tk.LEFT, padx=(5, 0))
