@@ -67,6 +67,34 @@ def image_bin( img, bin_factor):
 	return img
 
 
+def low_pass_filter( image_array, resolution=20, pixel_size=1):
+	box_size = image_array.shape[0]
+	mask_radius = box_size * pixel_size / resolution
+
+	mask = create_circular_mask(box_size, mask_radius)
+	image_fft = cp.fft.fft2(image_array)
+	image_fft = cp.fft.fftshift(image_fft)
+
+	result = image_fft * mask
+	result = cp.fft.ifftshift(result)
+	result = cp.fft.ifft2(result).real
+
+	return result.astype(cp.float32)
+
+
+def create_circular_mask(box_size, mask_radius):
+	center = box_size // 2
+	y, x = cp.ogrid[:box_size, :box_size]
+
+	# Calculate distances from center
+	dist_from_center = cp.sqrt((x - center)**2 + (y - center)**2)
+
+	# Create the mask
+	mask = (dist_from_center <= mask_radius).astype(int)
+
+	return mask
+
+
 ### index_length refers how many angles to return. The angles will be ranked based on correlation score.
 def find_psi_gridsearching ( image_array, model_array, center=180.0, angle_range=180.0, step=5.0, order=1, index_length=1 ):
 	max_correlation = 0
@@ -126,7 +154,7 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 
 		box_size = image_array.shape[0]
 
-		### clip image to avoid bad pixels on edges of micrograph
+		### clip image to avoid bad pixels on edges of micrograph, usually not usefull
 		image_array = image_array[edge:box_size-edge, edge:box_size-edge]
 		if strategy == 'fft':
 			angle_max = find_initial_psi_s1( image_array, angle_step=2.0, width=width, length=length, fft_size=fft_size, bin_factor=bin_factor )			
@@ -311,7 +339,6 @@ def find_peak_1( array_1d, min_gap=80):
 	peak_values = array_1d_np[ sorted_peaks]
 
 	center = len(array_1d_np) // 2
-	peak_values = array_1d_np[sorted_peaks]
 	center = len(array_1d_np) // 2
 
 	small_index_peak = None
@@ -379,20 +406,33 @@ def find_peak_2( array_1d, min_gap=80):
 		if len(valid_neg_peaks) > 0:
 			closest_neg_peak = valid_neg_peaks[np.argmin(np.abs(valid_neg_peaks - pos_peak))]
 			diff = np.abs(array_1d_np[pos_peak] - array_1d_np[closest_neg_peak])
-			
-			diff_list.append((diff, 0.5*(pos_peak + closest_neg_peak)))
+
+
+			# find the positive peak
+			#diff_list.append((diff, pos_peak))
+
+			# find the negative particle
+			diff_list.append((diff, closest_neg_peak))				
+
+			# find the middle of negative and positive peak
+			#diff_list.append((diff, 0.5*(pos_peak + closest_neg_peak)))
 
 	diff_list.sort(reverse=True)
-	#print (diff_list)
-	left_peak, right_peak = 0, len(array_1d_np)-1
-	for diff, index in diff_list[:2]:
-		#print (index)
+	left_peak, right_peak = None, None
+	max_index = len(array_1d_np)-1
+	for diff, index in diff_list[:6]:
+		if left_peak is not None and right_peak is not None:
+			break
 		if abs(index - center) < min_gap//2:
 			continue
-		if index < center and index > left_peak:
+		if index < center and index > 0 and left_peak is None:
 			left_peak = index
-		elif index > center and index < right_peak:
+		elif index > center and index < max_index and right_peak is None:
 			right_peak = index
+	if left_peak is None:
+		left_peak = 0
+	if right_peak is None:
+		right_peak = 0
 	return left_peak, right_peak
 		
 
@@ -423,11 +463,15 @@ def readslice( image ):
 		zslice = int(image[0])-1
 		image_array = imagestack.data[zslice]
 		image_array = cp.asarray(image_array)
+		
+		if image_array.ndim < 2:
+			#this happens when there is only one particle in a micrograph
+			image_array = cp.asarray(imagestack.data)
 	return image_array
 
 
 
-def find_diameter( particles_df, sigma, min_gap):
+def find_diameter( particles_df, sigma, min_gap, resolution=0):
 	
 	diameters={'_rlnDiameterByRASTR':[]}
 	particle_number = particles_df.shape[0]
@@ -437,7 +481,10 @@ def find_diameter( particles_df, sigma, min_gap):
 		psi = angle_within180( particles_df.loc[ line_number, '_rlnAnglePsi'] )
 		image = particles_df.loc[ line_number, '_rlnImageName'].split('@')
 		image_array = readslice( image )
-		image_array_lowpass = gaussian_filter(image_array , sigma)
+		if sigma > 0:
+			image_array_lowpass = gaussian_filter(image_array , sigma)
+		if resolution > 0:
+			image_array_lowpass = low_pass_filter(image_array, resolution, pixel_size)
 		image_array_rotated = rotate_image( image_array_lowpass, psi=psi)
 		image_1d = cp.sum(image_array_rotated, axis=1)
 		peak_one, peak_two = find_peak(image_1d, min_gap)
@@ -737,6 +784,9 @@ class optimize_diameter_parameter:
 			self.sigma = int(self.entry_sigma.get())
 		except: self.sigma = 0
 		try:
+			self.lowpass = float(self.entry_lowpass.get())
+		except: self.lowpass = 0.0
+		try:
 			self.min_gap = float(self.entry_min_gap.get())
 		except: self.min_gap = 0.0
 
@@ -758,11 +808,14 @@ class optimize_diameter_parameter:
 		angle = self.angle
 		sigma = self.sigma
 		min_gap = self.min_gap
+		lowpass = self.lowpass
 
 		image = self.particles_df.loc[ zslice-1, '_rlnImageName'].split('@')
 		image_array = readslice( image )
-		image_array = rotate_image( image_array, psi=angle)
 		image_array = gaussian_filter( image_array, sigma)
+		if lowpass > 0:
+			image_array = low_pass_filter( image_array, lowpass, pixel_size)
+		image_array = rotate_image( image_array, psi=angle)
 		image_array_vertical = rotate_image(image_array, psi=-90)
 		image_1d = cp.sum( image_array, axis=1)
 		image_1d = image_1d - image_1d.min()
@@ -801,6 +854,7 @@ class optimize_diameter_parameter:
 		self.update_parameter()
 		self.optimized_sigma = self.sigma
 		self.optimized_min_gap = self.min_gap
+		self.optimized_lowpass = self.lowpass
 		self.ax1.clear()
 		self.ax2.clear()
 		self.root.destroy()
@@ -848,6 +902,12 @@ class optimize_diameter_parameter:
 		sigma_default.set('0')
 		self.entry_sigma = self.create_entry( self.frame_controls )
 
+		label_lowpass = ttk.Label(frame_controls, text='lowpass:')
+		label_lowpass.pack(side=tk.LEFT, padx=(10,5))
+		lowpass_default = tk.StringVar()
+		lowpass_default.set('0')
+		self.entry_lowpass = self.create_entry( self.frame_controls)
+
 		label_min_gap = ttk.Label(frame_controls, text='gap:')
 		label_min_gap.pack(side=tk.LEFT, padx=(10,5))
 		self.entry_min_gap = self.create_entry( self.frame_controls )
@@ -883,12 +943,13 @@ class optimize_diameter_parameter:
 		self.root.mainloop()
 	
 	def report(self):
-		return self.optimized_sigma, self.optimized_min_gap, True
+		return self.optimized_sigma, self.optimized_min_gap, self.optimized_lowpass, True
 
 
 class choose_threshold_window:
-	def __init__(self, particles_df):
+	def __init__(self, particles_df, label_size=16 ):
 		self.particles_df = particles_df
+		self.label_size = label_size
 		self.startwindow()
 
 	def startwindow(self):
@@ -918,10 +979,14 @@ class choose_threshold_window:
 		self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
 		self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1, pady=5)
 
-		self.ax.hist(self.particles_df['_rlnDiameterByRASTR'], bins=200, color='blue', edgecolor='black')
+		min_val = self.particles_df['_rlnDiameterByRASTR'].min()
+		max_val = self.particles_df['_rlnDiameterByRASTR'].max()
+		bins = np.arange(min_val, max_val + 2, 2)
+
+		self.ax.hist(self.particles_df['_rlnDiameterByRASTR'], bins=bins, color='blue', edgecolor='black')
 		self.ax.set_title('Diameter distribution')
-		self.ax.set_ylabel('#particles')
-		self.ax.set_xlabel('diameter(A)')
+		self.ax.set_ylabel('#particles', fontsize=self.label_size)
+		self.ax.set_xlabel('diameter(A)', fontsize=self.label_size)
 		self.ax.grid(True)
 		self.fig.tight_layout()
 
@@ -1012,6 +1077,39 @@ def get_average( optics_df, particles_df ):
 
 	return projection
 
+def get_power_spectrum( image_array):
+	boxsize = image_array.shape[0]
+	center_y, center_x = boxsize//2, boxsize//2
+	# normalize input image
+	image_array = (image_array - cp.mean(image_array)) / cp.std(image_array)
+	# pad image	
+	image_array = cp.pad(image_array, pad_width=boxsize, mode='constant', constant_values=0)
+	
+	fft = cp.fft.fft2(image_array)
+	fft = cp.fft.fftshift(fft)
+	power_spectrum = cp.abs(fft) ** 2
+
+	power_spectrum[center_y, center_x] = 0.0
+	
+	return power_spectrum
+
+
+def get_average_power(particles_df):
+	for index, row in particles_df.iterrows():
+		image = row['_rlnImageName'].split('@')
+		psi = float(row['_rlnAnglePsi'])
+		x, y = float(row['_rlnOriginXAngst']) / pixel_size, float(row['_rlnOriginYAngst']) / pixel_size
+		image_array = readslice(image)
+		image_array = rotate_image(image_array, psi=psi, x=x, y=y, order=3)
+		power_spectrum = get_power_spectrum(image_array)
+
+		if index == 0:
+			average_power = power_spectrum
+		else:
+			average_power += power_spectrum
+	average_power /= particles_df.shape[0]
+	average_power = rotate_image(average_power, psi=-90, x=0, y=0, order=3)
+	return average_power
 
 def normalize_tube( model_2d ):
 	### diameter is manually changed here
@@ -1133,10 +1231,6 @@ def tube_subtraction( starfile, model_2d, outputfilename, separate=False, diamet
 		current_starfile.particles_df = particles_df
 	return current_starfile
 
-def tube_subtraction_projection( starfile, outputfilename):
-	optics_df, particles_df = starfile.optics_df, starfile.particles_df
-
-
 		
 
 	
@@ -1173,6 +1267,8 @@ def parseOptions():
 	
 	parser.add_argument('--subtraction', action='store_true', dest='subtraction', default=False,
 		    help=' option to subtract the average particle from all particles')
+	parser.add_argument('--average_power_spectrum', action='store_true', dest='average_power_spectrum', default=False,
+			help=' option to calculate the average power spectrum')
 
 	results=parser.parse_args()
 
@@ -1227,7 +1323,7 @@ def main():
 		while not optimized:
 			optimizer = optimize_diameter_parameter( particles_df )
 			optimizer.startwindow()
-			sigma, min_gap, optimized = optimizer.report()
+			sigma, min_gap, lowpass, optimized = optimizer.report()
 			pyplot.close()
 
 	if results.find_psi:
@@ -1241,9 +1337,12 @@ def main():
 
 	if results.find_diameter:
 
-		diameters = find_diameter( particles_df, sigma, min_gap)
+		diameters = find_diameter( particles_df, sigma, min_gap, lowpass)
 		diameters_df = pd.DataFrame(diameters)
-		starfile.particles_df = pd.concat([particles_df, diameters_df], axis=1)
+		if '_rlnDiameterByRASTR' in starfile.particles_df.columns:
+			starfile.particles_df['_rlnDiameterByRASTR'] = diameters_df['_rlnDiameterByRASTR']
+		else:
+			starfile.particles_df = pd.concat([particles_df, diameters_df], axis=1)
 		threshold_window = choose_threshold_window( starfile.particles_df )
 
 		starfile.particles_df = threshold_window.particles_df
@@ -1261,20 +1360,31 @@ def main():
 
 	if results.showaverage:
 		average = get_average( optics_df, particles_df )
+		average = rotate_image( average, psi=-90, x=0, y=0, order=3)
 		model_2d = average
 		average_name = results.output_rootname + '_average.mrc'
 		pyplot.clf()
 		with mrcfile.new(average_name, overwrite=True) as f:
 			f.set_data( average.get().astype('float32'))
+			f.voxel_size = pixel_size
 		pyplot.imshow(average.get(), origin='lower', cmap='gray')
 		pyplot.show()
 
-		pyplot.plot(cp.sum(average, axis=1).get())
+		pyplot.plot(cp.sum(average, axis=0).get())
 		pyplot.show()
 
 	if results.subtraction:
 		starfile = tube_subtraction( starfile, model_2d, results.output_rootname+'_subtracted.mrcs', separate=False, diameter_step=10)
 		#starfile = tube_subtraction_projection( starfile, results.output_rootname+'_subtracted_projection.mrcs')		
+
+	if results.average_power_spectrum:
+		average_power = get_average_power( particles_df )
+		pyplot.imshow(average_power.get(), origin='lower', cmap='gray')
+		pyplot.show()
+		with mrcfile.new(results.output_rootname + '_average_power.mrc', overwrite=True) as f:
+			f.set_data( average_power.get().astype('float32'))
+			f.voxel_size = pixel_size
+
 
 	starfile.write( results.output_rootname + '.star')
 

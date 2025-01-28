@@ -27,6 +27,34 @@ def rotate_image(image_array, psi=0, x=0, y=0, order=3 ):
 
 
 
+def low_pass_filter( image_array, resolution=20, pixel_size=1):
+	box_size = image_array.shape[0]
+	mask_radius = box_size * pixel_size / resolution
+
+	mask = create_circular_mask(box_size, mask_radius)
+	image_fft = np.fft.fft2(image_array)
+	image_fft = np.fft.fftshift(image_fft)
+
+	result = image_fft * mask
+	result = np.fft.ifftshift(result)
+	result = np.fft.ifft2(result).real
+
+	return result.astype(np.float32)
+
+
+def create_circular_mask(box_size, mask_radius):
+	center = box_size // 2
+	y, x = np.ogrid[:box_size, :box_size]
+
+	# Calculate distances from center
+	dist_from_center = np.sqrt((x - center)**2 + (y - center)**2)
+
+	# Create the mask
+	mask = (dist_from_center <= mask_radius).astype(int)
+
+	return mask
+
+
 class ShowStack:
 	def __init__(self, filename):
 		self.filename = filename
@@ -43,6 +71,7 @@ class ShowStack:
 		self.zslice = 1
 		self.angle = 0.0
 		self.sigma = 0
+		self.lowpass = 0.0
 
 		self.start_window()
 
@@ -108,6 +137,10 @@ class ShowStack:
 		self.label_sigma.pack(side=tk.LEFT, padx=(10,5))
 		self.entry_sigma = self.create_entry( self.frame_controls)
 
+		self.label_lowpass = ttk.Label(self.frame_controls, text='lowpass:')
+		self.label_lowpass.pack(side=tk.LEFT, padx=(10,5))
+		self.entry_lowpass = self.create_entry( self.frame_controls)
+
 		self.show_center_yes = tk.BooleanVar()
 		self.show_center_yes.set(False)
 		self.C_center = ttk.Checkbutton(self.frame_controls, text='center', command=self.update_plot, variable=self.show_center_yes)
@@ -152,10 +185,15 @@ class ShowStack:
 			sigma = int(self.entry_sigma.get())
 		except:
 			sigma = 0
+		try:
+			lowpass = float(self.entry_lowpass.get())
+		except:
+			lowpass = 0
 
 		self.zslice = zslice
 		self.angle = angle
 		self.sigma = sigma
+		self.lowpass = lowpass
 		self.update_plot()
 
 	def update_plot(self):
@@ -163,7 +201,10 @@ class ShowStack:
 		try:
 			self.ax.clear()
 			image_array = self.readstack(self.filename, self.zslice)
-			image_array = gaussian_filter(image_array, self.sigma)
+			if self.sigma > 0:
+				image_array = gaussian_filter(image_array, self.sigma)
+			if self.lowpass > 0:
+				image_array = low_pass_filter( image_array, self.lowpass, self.pixel_size)
 			if self.rotate_yes.get():
 				image_array = rotate_image(image_array, psi=self.psi)
 			else:

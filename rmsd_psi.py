@@ -1,62 +1,78 @@
 #! /usr/bin/env python
 from starparse import StarFile
-
 import sys
 import numpy as np
 import time
 import pandas as pd
+import argparse
+
 def within180(lis):
-	lis =  (lis + 360)%180
-	return lis
-file_1 = sys.argv[1]
-file_2 = sys.argv[2]
+    return (lis + 360)%180
 
-star_file_1 = StarFile( file_1 )
-star_file_2 = StarFile( file_2 )
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Compare psi angles between two star files')
+    parser.add_argument('file1', help='First star file')
+    parser.add_argument('file2', help='Second star file')
+    parser.add_argument('--output', '-o', default='large_psi_diff.star', dest='output', action='store',
+                       help='Output star file for particles with psi difference > 30 (default: large_psi_diff.star)')
+    parser.add_argument('--write', '-w', action='store_true', dest='write',
+                       help='Write output star file')
+    return parser.parse_args()
 
-particle_df_1 = star_file_1.particles_df
-particle_df_2 = star_file_2.particles_df
-
-
-#create an empty pandas dataframe
-particle_df_3 = pd.DataFrame()
-dif = []
-
-# iterate through the dataframe
-for linenumber, row in particle_df_1.iterrows():
-	
-	psi_1 = float(row['_rlnAnglePsi'])
-	psi_2 = float(particle_df_2['_rlnAnglePsi'][linenumber])
+def main():
+    args = parse_arguments()
+    star_file_1 = StarFile(args.file1)
+    star_file_2 = StarFile(args.file2)
 
 
-	psi_1 = within180(psi_1)
-	psi_2 = within180(psi_2)
-	dif_o  = abs( psi_1 - psi_2)
-	if dif_o > 90:
-		dif_o = 180-dif_o
-	
-	
-	
-	if dif_o <= 50:
-		dif.append(dif_o)
-	#else:
-		#append row to the dataframe
-		#particle_df_3 = particle_df_3.append(row, ignore_index=True)
-	else:
-		print(linenumber)
+    particle_df_1 = star_file_1.particles_df
+    particle_df_2 = star_file_2.particles_df
+    #print( particle_df_1)
+    dif = []
+    dif_all = []
+    dif_large = []
+    
+    for linenumber, row in particle_df_1.iterrows():
+        if row['_rlnImageName'] != particle_df_2['_rlnImageName'][linenumber]:
+            print('star file not matching')
+
+        psi_1 = float(row['_rlnAnglePsi'])
+        psi_2 = float(particle_df_2['_rlnAnglePsi'][linenumber])
+
+        psi_1 = within180(psi_1)
+        psi_2 = within180(psi_2)
+        dif_o = abs(psi_1 - psi_2)
+        
+        if dif_o > 90:
+            dif_o = 180-dif_o
+        
+        dif_all.append(dif_o)
+        
+        if dif_o <= 30:
+            dif.append(dif_o)
+        else:
+            dif_large.append(row)
+    
 
 
-#star_file_1.particles_df = particle_df_3
-#star_file_1.write('output.star')
+    if args.write:
+        particle_df_3 = pd.DataFrame(dif_large, columns=particle_df_1.columns)
+        star_file_1.particles_df = particle_df_3
+        star_file_1.write(args.output)
 
-print(len(dif))
-dif = np.array(dif)
-	
+    print(f"Particles with psi difference ≤ 30°: {len(dif)}")
+    dif = np.array(dif)
+    dif_all = np.array(dif_all)
 
+    rmsd = np.sqrt(((dif) ** 2).mean())
+    print(f"RMSD (≤ 30°): {rmsd}")
 
-rmsd = np.sqrt(((dif) ** 2).mean())
-print(rmsd)
+    print(f"Total particles: {len(dif_all)}")
+    rmsd = np.sqrt(((dif_all)**2).mean())
+    print(f"RMSD (all): {rmsd}")
 
+if __name__ == "__main__":
+    main()
 
 
 
