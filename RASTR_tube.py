@@ -95,34 +95,6 @@ def create_circular_mask(box_size, mask_radius):
 	return mask
 
 
-### index_length refers how many angles to return. The angles will be ranked based on correlation score.
-def find_psi_gridsearching ( image_array, model_array, center=180.0, angle_range=180.0, step=5.0, order=1, index_length=1 ):
-	max_correlation = 0
-	correlation_maxs = []
-	searching_list = None
-	center = cp.atleast_1d(cp.array(center))
-
-	### center can be a list of angles
-	### use loop to get multiple ranges combined
-	for angle in center:
-		min_angle = angle - 0.5 * angle_range
-		max_angle = angle + 0.5 * angle_range
-		new_angles = cp.arange(min_angle, max_angle, step)
-		searching_list = cp.append(searching_list, new_angles) if searching_list is not None else new_angles
-
-	### find the angle with highest correlation 
-	for angle in searching_list:
-		model_2d_rotated = rotate_image_3dto2d( model_array, psi=angle, x=0, y=0, order=order)
-		correlation_array = correlate ( image_array, model_2d_rotated, mode='full', method='fft')
-		correlation_maxs.append((angle, cp.max(correlation_array)))
-		if cp.max(correlation_array) > max_correlation:
-			best_angle = angle
-			max_correlation = cp.max(correlation_array)
-	correlation_maxs = cp.array( correlation_maxs )
-	correlation_maxs = correlation_maxs[cp.argsort(correlation_maxs[:,1])]
-	return angle_within180( best_angle )
-
-
 def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 	length = psi_optimizer['length']
 	pad = psi_optimizer['pad']
@@ -131,9 +103,7 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 	sigma = psi_optimizer['sigma']
 	width = psi_optimizer['width']
 	strategy = psi_optimizer['strategy']
-	edge = 0
 	
-	optics_df = starfile.optics_df
 	particles_df = starfile.particles_df
 	particle_number = particles_df.shape[0]
 	start_time = time.time()
@@ -142,7 +112,7 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 	print("psi iteration 1 at:")
 	for line_number, particle in particles_df.iterrows():
 		
-		print(f'{line_number + 1} /{particles_df.shape[0]}', end='\r')
+		print(f'{line_number + 1} /{particle_number}', end='\r')
 
 		image = particle['_rlnImageName'].split('@')
 		image_array = readslice(image)
@@ -152,10 +122,8 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 		if bin_factor != 1:
 			image_array = image_bin( image_array, bin_factor)
 
-		box_size = image_array.shape[0]
+	
 
-		### clip image to avoid bad pixels on edges of micrograph, usually not usefull
-		image_array = image_array[edge:box_size-edge, edge:box_size-edge]
 		if strategy == 'fft':
 			angle_max = find_initial_psi_s1( image_array, angle_step=2.0, width=width, length=length, fft_size=fft_size, bin_factor=bin_factor )			
 			angle_max = find_initial_psi_s1( image_array, center=angle_max-90, angle_range=10, angle_step=0.5, width=width, length=length, fft_size=fft_size, bin_factor=bin_factor)
@@ -166,35 +134,9 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 		#if abs( angle_max - angle_within180(particles_df.loc[line_number, '_rlnAnglePsi']) ) > 5:
 			#pyplot.plot()
 			#print(f"{line_number+1}, angle_max: {angle_max}, star: {particles_df.loc[line_number, '_rlnAnglePsi']}")
-	print(f'{particles_df.shape[0]} /{particles_df.shape[0]}')
+	print(f'{particle_number} /{particle_number}')
 	print("done        ")
 	print("time for psi finding: ", time.time() - start_time)
-
-	if mode == 'full':
-
-		print("psi iteration 2 at:")
-		particles_df['_rlnAnglePsi'] = angle_maxs.get()
-		shifts = [ minimize_shift( particles_df.iloc[line_number], min_gap=80) for line_number in range(starfile.particles_df.shape[0])]
-		xshifts, yshifts = zip(*shifts)
-		particles_df['_rlnOriginXAngst'] = xshifts
-		particles_df['_rlnOriginYAngst'] = yshifts
-		model_2d = get_average( optics_df, particles_df )
-
-		for line_number, particle in particles_df.iterrows():
-			print(f'{line_number + 1} /{particles_df.shape[0]}', end='\r')
-
-			image = particle['_rlnImageName'].split('@')
-			image_array = readslice(image)
-			if sigma != 0:
-				image_array = gaussian_filter(image_array, sigma=sigma)
-			image_array = cp.pad(image_array, pad_width=pad, mode='constant')
-			if bin_factor != 1:
-				image_array = image_bin( image_array, bin_factor)
-
-			box_size = image_array.shape[0]
-			image_array = image_array[edge:box_size-edge, edge:box_size-edge]
-			angle_maxs[line_number] = find_psi_gridsearching ( image_array, model_2d, center=angle_maxs[line_number], angle_range=4.0, step=0.1, order=3 ).get()
-		print("done           ")
 
 	return angle_maxs.get()
 
@@ -233,7 +175,7 @@ def find_initial_psi_s1( image_array, center=90.0, angle_range=180, angle_step=5
 
 	### clip only the center part.
 	center_x, center_y = real_shift.shape[1]//2, real_shift.shape[0]//2
-	### somehow making center constant fft pixel zero can make it faster
+	### somehow making center constant fft pixel zero can make it faster, and since center is used in all angles, changing it to any value won't affect psi determination
 	real_shift[center_y, center_x] = 0.0
 	half_box = fft_size / 2
 	real_shift = real_shift[center_y-half_box : center_y+half_box , center_x-half_box : center_x+half_box]
@@ -277,6 +219,7 @@ def customized_radon(image, thetas, length=100, width=4):
     return thetas[cp.argmax(sums)]
 
 
+# only used in psi finding optimization for display purpose
 def extract_sub_array(image, length, width, angle):
 	center_y, center_x = cp.array(image.shape) / 2 
 	angle_rad = cp.deg2rad(angle)
@@ -303,7 +246,7 @@ def extract_sub_array(image, length, width, angle):
 
 	
 
-### psi 40 is the same as theta 220 for this script's purpose, so we bring them all to 0-180
+### psi 40 is the same as psi 220 for this script's purpose, so we bring them all to 0-180
 def angle_within180( angle ):
 	return (angle + 360.0) % 180
 
@@ -335,7 +278,7 @@ def find_peak_1( array_1d, min_gap=80):
 	array_1d_np = array_1d_np - array_1d_np.min()
 	peaks = find_peaks( array_1d_np )[0]
 
-	sorted_peaks = peaks[np.argsort(array_1d_np[peaks])][::-1][:4]
+	sorted_peaks = peaks[np.argsort(array_1d_np[peaks])][::-1][:6]
 	peak_values = array_1d_np[ sorted_peaks]
 
 	center = len(array_1d_np) // 2
@@ -356,34 +299,6 @@ def find_peak_1( array_1d, min_gap=80):
 		return small_index_peak, big_index_peak
 	else:
 		return 0, 0
-
-def find_peak_1_backup():
-	current_main_peak = 0
-	highest_peak = sorted_peaks[current_main_peak]
-	second_highest_peak = None
-	found_both_peak = False
-	index = 0
-	while not found_both_peak:
-		if index+1 == len(sorted_peaks):
-			highest_peak, second_highest_peak = 0,0
-			break
-		if abs(sorted_peaks[index+1] - highest_peak) >= min_gap:
-			second_highest_peak = sorted_peaks[index+1]
-			
-			if array_1d_np[second_highest_peak] >= 0.8*array_1d_np[highest_peak]:
-				found_both_peak = True
-			else:
-				current_main_peak += 1
-				highest_peak = sorted_peaks[current_main_peak]
-				index = 0
-				continue
-		else:
-			index += 1
-		
-	
-	sorted_indices = sorted([highest_peak, second_highest_peak])
-	return sorted_indices[0], sorted_indices[1]
-
 
 # maximum difference between positive and negative peak
 def find_peak_2( array_1d, min_gap=80):
@@ -504,10 +419,6 @@ class optimize_angle_finding:
 		self.optics_df = starfile.optics_df
 		self.pixel_size = float(self.optics_df.loc[0,'_rlnImagePixelSize'])
 		self.width = 2
-		
-		#self.length = 100
-		#self.fft_size = 240
-		# for testing speed
 		self.length = int(self.optics_df.loc[0,'_rlnImageSize'])
 		self.fft_size = int(self.optics_df.loc[0,'_rlnImageSize'])
 	def create_entry(self, parent, default_text=None):
@@ -1036,20 +947,6 @@ def minimize_shift( particle, sigma, min_gap ):
 	x = -distance * math.sin( psi/180.0*math.pi )
 	y = -distance * math.cos( psi/180.0*math.pi )
 
-	#image_array_rotated = rotate_image( image_array, psi=psi, x=x, y=y, order=3)
-	#image_array_vertical = rotate_image( image_array_rotated, psi=-90, order=3)
-	#image_projection = cp.sum(image_array_rotated, axis=1)
-	#peak_one, peak_two = find_peak( image_projection, min_gap )
-	#distance_after = abs( (peak_one + peak_two)/2 - image_array_rotated.shape[1]//2)
-
-	#if  distance_after >0:
-		#print (image,' distance: ', distance_after)
-		#image_array_vertical[240][240] = 9
-		#pyplot.imshow(image_array_vertical.get(), origin='lower', cmap='gray')
-		#pyplot.show()
-	#	pass
-
-
 	return x*pixel_size , y*pixel_size
 
 
@@ -1079,7 +976,6 @@ def get_average( optics_df, particles_df ):
 
 def get_power_spectrum( image_array):
 	boxsize = image_array.shape[0]
-	center_y, center_x = boxsize//2, boxsize//2
 	# normalize input image
 	image_array = (image_array - cp.mean(image_array)) / cp.std(image_array)
 	# pad image	
@@ -1088,25 +984,29 @@ def get_power_spectrum( image_array):
 	fft = cp.fft.fft2(image_array)
 	fft = cp.fft.fftshift(fft)
 	power_spectrum = cp.abs(fft) ** 2
-
+	center_y, center_x = power_spectrum.shape[0]//2, power_spectrum.shape[1]//2
 	power_spectrum[center_y, center_x] = 0.0
 	
 	return power_spectrum
 
 
 def get_average_power(particles_df):
+	num_particles = particles_df.shape[0]
 	for index, row in particles_df.iterrows():
+		#processed_count = index + 1
+		
 		image = row['_rlnImageName'].split('@')
 		psi = float(row['_rlnAnglePsi'])
-		x, y = float(row['_rlnOriginXAngst']) / pixel_size, float(row['_rlnOriginYAngst']) / pixel_size
+		#x, y = float(row['_rlnOriginXAngst']) / pixel_size, float(row['_rlnOriginYAngst']) / pixel_size
 		image_array = readslice(image)
-		image_array = rotate_image(image_array, psi=psi, x=x, y=y, order=3)
+		image_array = rotate_image(image_array, psi=psi, order=1)
 		power_spectrum = get_power_spectrum(image_array)
 
 		if index == 0:
 			average_power = power_spectrum
 		else:
 			average_power += power_spectrum
+		#print(f"Processed {processed_count}/{num_particles} particles", end='\r')
 	average_power /= particles_df.shape[0]
 	average_power = rotate_image(average_power, psi=-90, x=0, y=0, order=3)
 	return average_power
@@ -1327,26 +1227,26 @@ def main():
 			pyplot.close()
 
 	if results.find_psi:
-		time_start = time.time()
+		
 		updated_psi_values = find_psi( starfile, args, model_2d, mode='fast' )
+	
 		starfile.particles_df['_rlnAnglePsi'] = updated_psi_values
 		particles_df = starfile.particles_df
-		time_end = time.time()
-		print (f'psi calculation finished in {time_end-time_start} seconds')
+		
 
 
 	if results.find_diameter:
-
+		time_start = time.time()
 		diameters = find_diameter( particles_df, sigma, min_gap, lowpass)
+		print(f'diameter calculation finished in {time.time() - time_start} seconds')
 		diameters_df = pd.DataFrame(diameters)
 		if '_rlnDiameterByRASTR' in starfile.particles_df.columns:
 			starfile.particles_df['_rlnDiameterByRASTR'] = diameters_df['_rlnDiameterByRASTR']
 		else:
 			starfile.particles_df = pd.concat([particles_df, diameters_df], axis=1)
 		threshold_window = choose_threshold_window( starfile.particles_df )
-
 		starfile.particles_df = threshold_window.particles_df
-		
+
 
 	if results.minimize_shift:
 		shifts = [ minimize_shift( starfile.particles_df.iloc[line_number], sigma, min_gap) for line_number in range(starfile.particles_df.shape[0])]
@@ -1378,13 +1278,15 @@ def main():
 		#starfile = tube_subtraction_projection( starfile, results.output_rootname+'_subtracted_projection.mrcs')		
 
 	if results.average_power_spectrum:
+		time_start = time.time()
 		average_power = get_average_power( particles_df )
+		time_end = time.time()
 		pyplot.imshow(average_power.get(), origin='lower', cmap='gray')
 		pyplot.show()
 		with mrcfile.new(results.output_rootname + '_average_power.mrc', overwrite=True) as f:
 			f.set_data( average_power.get().astype('float32'))
 			f.voxel_size = pixel_size
-
+		print(f'Average power spectrum calculated in {time_end - time_start} seconds')
 
 	starfile.write( results.output_rootname + '.star')
 
