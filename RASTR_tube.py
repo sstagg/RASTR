@@ -264,10 +264,10 @@ def angle_within360( angle ):
 	
 def find_peak( array_1d, min_gap=80):
 	#Strategy two works best for protein decorated liposome
-	#peak_one, peak_two = find_peak_2( array_1d, min_gap)
+	peak_one, peak_two = find_peak_2( array_1d, min_gap)
 	
 	#strategy one works best for GalCer, especially SPOT_RASTR
-	peak_one, peak_two = find_peak_1(array_1d, min_gap)
+	#peak_one, peak_two = find_peak_1(array_1d, min_gap)
 	
 	return peak_one, peak_two
 
@@ -327,10 +327,10 @@ def find_peak_2( array_1d, min_gap=80):
 			#diff_list.append((diff, pos_peak))
 
 			# find the negative particle
-			diff_list.append((diff, closest_neg_peak))				
+			#diff_list.append((diff, closest_neg_peak))				
 
 			# find the middle of negative and positive peak
-			#diff_list.append((diff, 0.5*(pos_peak + closest_neg_peak)))
+			diff_list.append((diff, 0.5*(pos_peak + closest_neg_peak)))
 
 	diff_list.sort(reverse=True)
 	left_peak, right_peak = None, None
