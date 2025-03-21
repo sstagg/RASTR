@@ -30,7 +30,7 @@ def make_tmp(directory):
 
 #run a command, argument is a string
 def run_command(command):
-	print command
+	
 	process=subprocess.Popen(command.split(), stdout=subprocess.PIPE)
 	output, error = process.communicate()
 
@@ -39,7 +39,7 @@ def flip(maskvolume):
 	if maskvolume.max()<=1 and maskvolume.min()>=0:
 		return 1-maskvolume
 	else:
-		print 'not binary mask'
+		print ('not binary mask')
 	
 ### using scipy to rotate a 3d matrix with rot, tilt, psi angle, rotation order verified using cisTEM generate.
 def volumerotation(volume,rot=0,tilt=0,psi=0,order=1):
@@ -112,7 +112,7 @@ def column(filename):
 		paracolumn['shx']=4
 		paracolumn['shy']=5
 	else:
-		print "unknown file type"
+		print ("unknown file type")
 	return paracolumn
 
 ### funcition for subtration, utilizing relion_project --subtract_exp
@@ -128,7 +128,6 @@ def subtraction(tempangle,starfilename,pad):
 def bin_3d(volume):
 	boxsize=volume.shape[0]
 	if boxsize%2 !=0:
-		print 'boxsize odd, exiting'
 		sys.exit()
 	newboxsize=boxsize/2
 	volume=volume.reshape(boxsize/2,2,boxsize/2,2,boxsize/2,2)
@@ -146,10 +145,10 @@ def unbin_2d(singleslice):
 def setupLogger():
 
 	logging.basicConfig(level=logging.DEBUG,
-	                    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-	                    datefmt='%m-%d %H:%M',
-	                    filename=output_rootname+'.log',
-	                    filemode='w')
+						format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+						datefmt='%m-%d %H:%M',
+						filename=output_rootname+'.log',
+						filemode='w')
 	#define a handler which writes INFO messages or higher to the sys.stderr
 	console = logging.StreamHandler()
 	console.setLevel(logging.INFO)
@@ -269,36 +268,36 @@ def parseOptions():
 	parser = argparse.ArgumentParser()
 	
 	parser.add_argument('-s','--star_in', action='store', dest='star_in',
-	                    help='      initial star file for the aligned model')
+						help='      initial star file for the aligned model')
 	parser.add_argument('-m','--model', action='store', dest='model',
-	                    help='      aligned model to subtract')
+						help='      aligned model to subtract')
 	parser.add_argument('-a','--angpix', action='store', dest='angpix',
-	                    help='      angstroms per pixel')
+						help='      angstroms per pixel')
 	parser.add_argument('-r','--radius', type=int, action='store', dest='radius',
-	                    help='      Size of sphere to reconstruct, pixels, default is 3/16 of box size')
+						help='      Size of sphere to reconstruct, pixels, default is 3/16 of box size')
 	parser.add_argument('-x','--x_start', type=int, action='store', dest='x_start',
-	                    help='      center of sphere to mask in x at phi=0, pixels, IMOD coordinates, default is 3/4 of box size')
+						help='      center of sphere to mask in x at phi=0, pixels, IMOD coordinates, default is 3/4 of box size')
 	parser.add_argument('-n','--n_spheres', type=int, action='store', dest='n_spheres', default=4,
-	                    help='      Number of spheres to mask around axis, convenient if 360 is divisable by n_spheres, defualt is 9')
+						help='      Number of spheres to mask around axis, convenient if 360 is divisable by n_spheres, defualt is 9')
 	parser.add_argument('-t','--tube_radius', type=int, action='store', dest='trad',
-	                    help='      radius of the membrane to be subtracted, this will remove the tube out to a certain radius. Used for decorations')
+						help='      radius of the membrane to be subtracted, this will remove the tube out to a certain radius. Used for decorations')
 	parser.add_argument('-c','--center', action='store_true', default=False,
-	                    dest='center',
-	                    help='      center the masked area in a new smaller box')
+						dest='center',
+						help='      center the masked area in a new smaller box')
 	parser.add_argument('-o', '--output', action='store', dest='output_rootname',
-	                     help='     output rootname for star/mrcs, default is RASTR_particles')
+						 help='     output rootname for star/mrcs, default is RASTR_particles')
 	
 	parser.add_argument('-k', '--keep_scratch', action='store_true', default=False,
-	                    dest='keep_scratch',
-	                    help='      keep scratch folder, default is False, only final star, mrcs, and reconstruction output on default')
+						dest='keep_scratch',
+						help='      keep scratch folder, default is False, only final star, mrcs, and reconstruction output on default')
 	parser.add_argument('-pad','--pad',action='store',dest='pad',default=2)
 	parser.add_argument('-or','--order',action='store',dest='order',default=3)
 	parser.add_argument('-f','--test', action='store_true', default=False,
-	                    dest='test_TF',
-	                    help='      option for testing, dont use, was needed during setup')
+						dest='test_TF',
+						help='      option for testing, dont use, was needed during setup')
 	parser.add_argument('-b','--both',action='store_true', default=False,
-                            dest='both',
-	                    help='	do both masking and center. End with two stacks, one with section masked keeping same box size as original and the second with it centered in a smaller box')	
+							dest='both',
+						help='	do both masking and center. End with two stacks, one with section masked keeping same box size as original and the second with it centered in a smaller box')	
 
 	parser.add_argument('-g','--gauss',type=int, default=5, dest='gauss', help='	Sigma for gaussian edge to add to sphere. Default = 5')	
 	
@@ -314,16 +313,16 @@ def parseOptions():
 	#make sure all the required arguments are here
 
 	if results.star_in == None:
-		print 'Required arguments: --star_in <star file> --model <model file> -- angpix <angpix>; use -h or --help to see all options'
+		print ('Required arguments: --star_in <star file> --model <model file> -- angpix <angpix>; use -h or --help to see all options')
 		sys.exit()
 	
 	if results.model == None:
-		print 'Required arguments: --star_in <star file> --model <model file> -- angpix <angpix>; use -h or --help to see all options'
+		print ('Required arguments: --star_in <star file> --model <model file> -- angpix <angpix>; use -h or --help to see all options')
 		sys.exit()
 	
 	
 	if results.angpix == None:
-		print 'Required arguments: --star_in <star file> --model <model file> -- angpix <angpix>; use -h or --help to see all options'
+		print ('Required arguments: --star_in <star file> --model <model file> -- angpix <angpix>; use -h or --help to see all options')
 		sys.exit()
 	return (results)
 		
@@ -342,9 +341,9 @@ if __name__=="__main__":
 	order=results.order
 	
 	if results.output_rootname == None:
-	        output_rootname = 'RASTR_particles'
+			output_rootname = 'RASTR_particles'
 	else:
-	        output_rootname = results.output_rootname
+			output_rootname = results.output_rootname
 
 	### initial dictionaries of different files,key is angle, item is filename.. eg blackmasks['0.0']='blackmask0.0.mrc'
 	angles=[]
@@ -358,8 +357,8 @@ if __name__=="__main__":
 
 	#Default values to be printed in log file	
 
-        initial_star_in = results.star_in
-        angpix = str(results.angpix)
+	initial_star_in = results.star_in
+	angpix = str(results.angpix)
 	
 
 	#create a scratch directory
@@ -367,10 +366,10 @@ if __name__=="__main__":
 	scratch = 'scratch'
 	scratch_num = 2
 	if os.path.isdir(scratch) is True:
-        	while os.path.isdir(scratch) is True:
-                        scratch = 'scratch'+str(scratch_num)
-                	scratch_num+=1
-        make_tmp(scratch)
+			while os.path.isdir(scratch) is True:
+					scratch = 'scratch'+str(scratch_num)
+					scratch_num+=1
+	make_tmp(scratch)
 
 	#create a log file
 	logger1,logger2,logger3,logger4=setupLogger()

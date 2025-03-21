@@ -16,6 +16,12 @@ Also contains code for  SPOT-RASTR, diameTR and helpful python scripts for cryo-
 - Clone the code
     ``` bash
     git clone https://github.com/sstagg/RASTR.git
+    
+    cd RASTR
+
+    conda activate RASTR
+
+    pip install -e .
     ```
 
 
@@ -31,24 +37,24 @@ A star file containing particle information is used as input, represented by 'pa
     ```bash
     # Go the main path
     cd /path/for/particles/star
-    diameTR.py --i particles.star --o particles_p -p
+    diameTR --i particles.star --o particles_p -p
     ```
 - Determine shift and diameter.
     ```bash
-    diameTR.py --i particles_p.star --o particles_pds -d -s
+    diameTR --i particles_p.star --o particles_pds -d -s
     ```
     Diameter distribution window will pop up for you to thresholding the diamters.
 
 - Create azimuthal average model
     ```bash
     # Assign values for tilt, rot angles
-    changestar.py --i particles_pds.star --o particles_pds.star -rot r360 -tilt 90
+    changestar --i particles_pds.star --o particles_pds.star -rot r360 -tilt 90
 
     # Reconstruct
     relion_reconstruct --i particles_pds.star --o particles.mrc --ctf
 
     # Average along y
-    azavg90.py particles.mrc
+    azavg particles.mrc
     ```
 
 - Get correct weighing
@@ -66,19 +72,19 @@ A star file containing particle information is used as input, represented by 'pa
 - Create mask
     ```bash
     # Create a sphere mask
-    createmask.py  boxsize center radius pixel_size
+    createmask  boxsize center radius pixel_size
     ```
 
 - Create RASTR particles
     ```bash
     # Go to the Relion 3Dclass job path
-    azavg90.py run_it005_class001.mrc
+    azavg run_it005_class001.mrc
     
     # Go back to main path
     cd ../..
 
     # Run RASTR. Replace pixel_size, rootname, spheremask.mrc with correct filename
-    RASTR.py --star_in Class3D/job001/run_it005_data.star  --model run_it005_class001azavg.mrc  --angpix pixel_size  -k -o rootname -ma spheremask.mrc  -al 0,90,180,270  --pad 3
+    RASTR --star_in Class3D/job001/run_it005_data.star  --model run_it005_class001azavg.mrc  --angpix pixel_size  -k -o rootname -ma spheremask.mrc  -al 0,90,180,270  --pad 3
     ```
 <br>
 </details>
@@ -88,8 +94,14 @@ A star file containing particle information is used as input, represented by 'pa
 <details>
 <summary>SPOT-RASTR</summary>
 <br>
-This is how you dropdown.
+Under construction.
+
 </details>
+
+
+
+
+
 
 <details>
 <summary>diameTR</summary>
@@ -98,7 +110,7 @@ Have your particle stack and star file ready.
 
 - Determine psi angles
     ```bash
-    diameTR.py --i particles.tar --o particles_p -p
+    diameTR --i particles.tar --o particles_p -p
     ```
 
     A optimiser window will pop up.
@@ -116,7 +128,7 @@ Have your particle stack and star file ready.
 
 - Determine diameter
     ```bash
-    diameTR.py --i particles_p.star --o particles_pd -d
+    diameTR --i particles_p.star --o particles_pd -d
     ```
     A optimiser window will pop up. Press R to navigator random slices. Monitor the 1D projection curve and two scatter points. A good set of parameters should have scatter points at the edge of tubules. 
     1. Change sigma. Start from 2 and sequentially increase. Usually sigma between 3 to 5 will work.
@@ -148,14 +160,13 @@ csexport.py --- A wrapper of csparc2star.py in pyem. Create softlinks to make pa
 - Navigator to the exported job directory. 
 
     ```bash
-    csexport.py J2_particles_exported.cs J2_particles_exported.star
+    csexport J2_particles_exported.cs J2_particles_exported.star
     ```
 
-averagefft.py --- Standalone script to compute averaged power spectrum of tubular images for helical indexing.
+averagefft --- Standalone script to compute averaged power spectrum of tubular images for helical indexing.
 
-changestar.py --- Star file handler. Used in house to manipulate orientations, shifts, and substitute with other star files.
+changestar --- Star file handler. Used in house to manipulate orientations, shifts, and substitute with other star files.
 
-starparse.py --- Star file parser. Used as a module by other script for reading star files into pandas dataframe.
 </details>
 
 ## References
