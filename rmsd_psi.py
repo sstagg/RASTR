@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-from starparse import StarFile
+from common.starparse import StarFile
 import sys
 import numpy as np
 import time
@@ -27,6 +27,8 @@ def main():
 
     particle_df_1 = star_file_1.particles_df
     particle_df_2 = star_file_2.particles_df
+    if len(particle_df_1) != len(particle_df_2):
+        print('star files not matching, using image name to match particles which may be slow')
     #print( particle_df_1)
     dif = []
     dif_all = []

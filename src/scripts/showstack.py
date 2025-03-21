@@ -13,7 +13,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import mrcfile
 import sys
 from scipy.ndimage import gaussian_filter
-from starparse import StarFile
+from common.starparse import StarFile
 
 
 
@@ -225,8 +225,12 @@ class ShowStack:
 		entry.bind('<KP_Enter>', lambda event: self.update_variable())
 		return entry
 
-if __name__ == '__main__':
+
+def main():
 	ShowStack(sys.argv[1])
+
+if __name__ == '__main__':
+	main()
 
 
 

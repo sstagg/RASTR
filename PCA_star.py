@@ -6,7 +6,7 @@ PCA analysis two star files.
 
 import pandas as pd
 import numpy as np
-from starparse import StarFile
+from common.starparse import StarFile
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import sys

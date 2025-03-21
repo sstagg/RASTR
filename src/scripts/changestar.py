@@ -4,7 +4,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import random
-from starparse import StarFile
+from src.common.starparse import StarFile
 import sys
 def parserInput(args):
 	parser = argparse.ArgumentParser(description='Modify Relion star file values.')
@@ -23,6 +23,10 @@ def parserInput(args):
 	parser.add_argument('--optic', action='store', default=1, dest='opticgroup')
 	parser.add_argument('--tilt-range', nargs=2, default=False, type=float, metavar=('MIN', 'MAX'), help='Filter tilt within the specified range')
 	parser.add_argument('--sort', action='store_true', default=False, dest='sort', help='Sort particles based on slice number, only work when there is just one particle stack file')
+	parser.add_argument('--replace_image', action='store', default=None, dest='replace_image', help='Replace image name prefix with the specified value')
+	parser.add_argument('--base_star', action='store', default=None, dest='base_star', help='Base star file to use for the output')
+	parser.add_argument('--slices_star', action='store', default=None, dest='slices_star', help='Star file with slice information')
+	parser.add_argument('--substitute', action='store_true', default=False, dest='substitute', help='Substitute the particles in the base star file with the ones in the slices star file')
 	return parser.parse_args(args)
 
 
@@ -38,11 +42,20 @@ def filter_tilt_range(star_file, tilt_min, tilt_max):
 	return star_file
 
 
+def get_slices(slices_star):
+	star_file = StarFile(slices_star)
+	particles_df = star_file.particles_df
+	slices = []
+	# extract slice number from image name
+	for line_number in range(particles_df.shape[0]):
+		image_name = particles_df["_rlnImageName"].iloc[line_number]
+		slice_number = int(image_name.split('@')[0])
+		slices.append(slice_number-1)
+	
 
+	return np.array(slices)
 
 # mapping from command line arguments to star file column names
-
-
 def change_star_file_values(args):
 	arg_to_column = {
 		"micrograph": "_rlnMicrographName",
@@ -71,6 +84,7 @@ def change_star_file_values(args):
 			if arg == 'image':
 				new_image_name = star_file.particles_df[column].str.replace(r'@.*$', f'@{value}', regex=True)
 				star_file.particles_df[column] = new_image_name
+	
 
 			elif arg == 'micrograph':
 				star_file.particles_df[column] = value
@@ -109,7 +123,22 @@ def change_star_file_values(args):
 		particles_df = star_file.particles_df
 		particles_df = particles_df.sort_values("_rlnImageName", key=lambda x: x.apply(extract_image_int))
 		star_file.particles_df = particles_df		
-
+	if parsed_args.replace_image:
+		star_file.particles_df["_rlnImageName"] = star_file.particles_df["_rlnImageName"].apply(
+        lambda x: f"{x.split('@')[0]}@{parsed_args.replace_image.rstrip('/')}/{x.split('@')[1].split('/')[-1]}"
+    )
+	if parsed_args.substitute:
+		if parsed_args.base_star is None or parsed_args.slices_star is None:
+			print("Base star file and slices star file must be provided for substitution")
+			sys.exit()
+		base_star = StarFile(parsed_args.base_star)
+		base_particle_df = base_star.particles_df
+		slices = get_slices(parsed_args.slices_star)
+		# select indexes in slices
+		base_particle_df = base_particle_df.iloc[slices]
+		# update particles_df
+		base_star.particles_df = base_particle_df
+		star_file = base_star
 	star_file.write(parsed_args.output)
 
 def check_only_one_stack():
@@ -118,8 +147,11 @@ def check_only_one_stack():
 def extract_image_int(values):
 	return int(values.split('@')[0])
 
-# run the script
-if __name__ == "__main__":
+
+def main():
 	import sys
 	change_star_file_values(sys.argv[1:])
 
+# run the script
+if __name__ == "__main__":
+	main()

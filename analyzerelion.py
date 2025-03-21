@@ -1,116 +1,151 @@
-#! /usr/bin/env python
+#!/usr/bin/env python
+"""
+RELION Analysis Script
 
-### Analyse function to show particles, resolution trends among iterations.
-### Usage, cd to the job directory, then ./analyzerelion.py
+Analyzes RELION particle data to show resolution trends and class distributions across iterations.
+Usage: Navigate to the job directory and run ./analyze_relion.py
+"""
 
 import os
-from matplotlib import pyplot
+import argparse
+from matplotlib import pyplot as plt
 
-### get total iterations
-def count_its(files):
+
+def count_iterations(files):
+	"""Count the total number of iterations based on model.star files."""
 	return sum(1 for file in files if file.endswith('model.star'))
 
 
-### get information for project
-def initial(files):
-	result = {}
-	for sfile in files:
-		### get into any optimiser file
-		if sfile.endswith('optimiser.star'):
-			with open(sfile,'r') as a:
-				lines = a.readlines()
-			for line in lines:
-				if len(line) > 18 and line[:18] == '_rlnOutputRootName':
-					### get output root name for relion project, typically 'run'
-					name = line.split()[1]
-					result['rootname'] = name
-					break
+def get_project_info(files):
+	"""Extract initial project information including root name and class count."""
+	project_info = {}
+	
+	# Find root name from optimiser file
+	for star_file in files:
+		if star_file.endswith('optimiser.star'):
+			with open(star_file, 'r') as file:
+				for line in file:
+					if line.strip().startswith('_rlnOutputRootName'):
+						root_name = line.split()[1]
+						project_info['rootname'] = root_name
+						break
 			break
-	# Name typically looks as Class3D/job001/run
-	with open(name.split('/')[-1] + '_it000_model.star','r') as a:
-		lines = a.readlines()
-
-	### get total classes
-	for line in lines:
-		if len(line)>13 and line[:13] == '_rlnNrClasses':
-				classes = line.split()[1]
-				result['class_number'] = int(classes)
+	
+	# Get class count from initial model file
+	model_file = f"{root_name.split('/')[-1]}_it000_model.star"
+	with open(model_file, 'r') as file:
+		for line in file:
+			if line.strip().startswith('_rlnNrClasses'):
+				project_info['class_number'] = int(line.split()[1])
 				break
-	return result
-
-		
-
-
-### pyplot show function, show resolution first, then distribution
-def show(itnumber, res=None, percent=None):
-	for i in res:
-		pyplot.plot( range(itnumber), res[i] )
-	pyplot.legend([i for i in res], loc='upper left')
-	pyplot.xlabel('iteration')
-	pyplot.ylabel('resolution')
-	pyplot.show()
-	for i in res:
-		pyplot.plot( range(itnumber), percent[i] )
-	pyplot.legend( [i for i in res], loc='upper left')
-	pyplot.xlabel('iteration')
-	pyplot.ylabel('distribution')
-	pyplot.show()
+				
+	return project_info
 
 
-
-### open it000_model file to get position of resolution and distribution
-def analyze_position( filename ):
-	with open(filename,'r') as a:
-		lines = a.readlines()
+def analyze_column_positions(filename):
+	"""Determine column positions for resolution and distribution data."""
 	position = {}
-	for line in lines:
-		if len(line) > 14:
+	
+	with open(filename, 'r') as file:
+		for line in file:
+			if not line.strip():
+				continue
+				
 			if line.split()[0] == '_rlnClassDistribution':
-				position['percent'] = int(line.split()[1][1:])-1
+				position['percent'] = int(line.split()[1][1:]) - 1
 			elif line.split()[0] == '_rlnEstimatedResolution':
-				position['resolution'] = int(line.split()[1][1:])-1
+				position['resolution'] = int(line.split()[1][1:]) - 1
 			
-			if line == 'data_model_class_1\n':
+			if line.strip() == 'data_model_class_1':
 				break
+				
 	return position
 
-def analyze():
-	files = os.listdir('.')
-	itnumber = count_its(files)
-	initials = initial(files)
-	rootname = initials['rootname']
-	classes = initials['class_number']	
 
-	### get a list of strings of classname
-	classnames = ['class' + str('%03i' %(i+1)) for i in range(classes)]
-	resolutions = {i: [] for i in classnames}
-	percent = {i: [] for i in classnames}
+def plot_results(iteration_count, resolutions, distributions):
+	"""Generate and display plots for resolution and distribution data."""
+	# Plot resolutions
+	plt.figure(figsize=(10, 6))
+	for class_name, res_values in resolutions.items():
+		plt.plot(range(iteration_count), res_values)
 	
-	position = analyze_position (rootname.split('/')[2]+'_it000_model.star')
+	plt.legend(list(resolutions.keys()), loc='upper left')
+	plt.xlabel('Iteration')
+	plt.ylabel('Resolution (Å)')
+	plt.title('Resolution Progression by Class')
+	plt.grid(True, linestyle='--', alpha=0.7)
+	plt.tight_layout()
+	plt.show()
+	
+	# Plot distributions
+	plt.figure(figsize=(10, 6))
+	for class_name, dist_values in distributions.items():
+		plt.plot(range(iteration_count), dist_values)
+	
+	plt.legend(list(distributions.keys()), loc='upper left')
+	plt.xlabel('Iteration')
+	plt.ylabel('Class Distribution (%)')
+	plt.title('Particle Distribution by Class')
+	plt.grid(True, linestyle='--', alpha=0.7)
+	plt.tight_layout()
+	plt.show()
 
-	### append model file stepwise
-	for i in range(itnumber):
-		iteration = 'it'+str('%03i' %i)
-		with open(rootname.split('/')[2]+'_'+iteration+'_model.star','r') as a:
-			lines = a.readlines()
+
+def analyze_data():
+	"""Main analysis function to extract and process RELION data."""
+	files = os.listdir('.')
+	iteration_count = count_iterations(files)
+	project_info = get_project_info(files)
+	
+	root_name = project_info['rootname']
+	class_count = project_info['class_number']
+	
+	# Create dictionary for each class
+	class_names = [f'class{i+1:03d}' for i in range(class_count)]
+	resolutions = {name: [] for name in class_names}
+	distributions = {name: [] for name in class_names}
+	
+	# Get column positions for data extraction
+	model_base = root_name.split('/')[-1]
+	positions = analyze_column_positions(f"{model_base}_it000_model.star")
+	
+	# Process each iteration
+	for i in range(iteration_count):
+		iteration = f"it{i:03d}"
+		model_file = f"{model_base}_{iteration}_model.star"
 		
-		for line in lines:
-			if len(line) > len(rootname):
-				words = line.split()
-				if words[0][:len(rootname)] == rootname:
-					resolutions[words[0][(len(rootname)+7):-4]].append(float(words[position['resolution']]))
-					percent[words[0][(len(rootname)+7):-4]].append(float(words[position['percent']]))
-				if line == 'data_model_class_1\n':
+		with open(model_file, 'r') as file:
+			for line in file:
+				if not line.strip():
+					continue
+					
+				tokens = line.split()
+				if tokens and tokens[0].startswith(root_name):
+					# Extract class name from filename
+					class_name = tokens[0][(len(root_name)+7):-4]
+					
+					# Store resolution and distribution values
+					resolutions[class_name].append(float(tokens[positions['resolution']]))
+					distributions[class_name].append(float(tokens[positions['percent']]))
+				
+				if line.strip() == 'data_model_class_1':
 					break
-	return itnumber, resolutions, percent
+	
+	return iteration_count, resolutions, distributions
 
 
 def main():
-	# Get lists of resolutions, percentages
-	itnumber, res, percent = analyze()
-
-	# Plot
-	show( itnumber, res, percent)
+	"""Main function to run the analysis and display results."""
+	# Parse command line arguments
+	parser = argparse.ArgumentParser(description='Analyze RELION particle data.')
+	parser.add_argument('--save', action='store_true', help='Save plots instead of displaying them')
+	args = parser.parse_args()
+	
+	# Get analysis data
+	iteration_count, resolutions, distributions = analyze_data()
+	
+	# Plot results
+	plot_results(iteration_count, resolutions, distributions)
 
 
 if __name__ == '__main__':

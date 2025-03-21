@@ -7,13 +7,11 @@
 import os
 import subprocess
 import sys
-from starparse import StarFile
+from src.common.starparse import StarFile
 
 def main():
     # Define temporary paths
-    dir_name = "links"
     temp_star = "tempt.star"
-    
     
     # Change .cs to .star
     csparcfile = sys.argv[1]
@@ -21,34 +19,15 @@ def main():
     
     subprocess.run([f"csparc2star.py {csparcfile} {temp_star}"], shell=True)
 
-    # Get particle stack file path
-    starfile = StarFile(temp_star)
-    particles_df = starfile.particles_df
-    
-
     # Execute Python script to change image path
     change_image_path(temp_star, outputfile)
-    
+
+
     # Remove temporary star file
     os.remove(temp_star)
-   
-    # change export job links with +'s'
-    for j_dir in os.listdir():
-        if not os.path.isdir(j_dir) or not j_dir.startswith('J'):
-            continue
-        extract_path = os.path.join(j_dir, 'extract')
-        if not os.path.isdir(extract_path):
-            continue
 
-        for file in os.listdir(extract_path):
-            if os.path.isfile(os.path.join(extract_path, file)):
-                old_path = os.path.join(extract_path, file)
-                if old_path.endswith('mrc'):
-                    new_path = os.path.join(extract_path, file + 's')
-                elif old_path.endswith('mrcs'):
-                    new_path = old_path
-                os.rename(old_path, new_path)
     print("Remember to run relion_stack_create xxx to get new stack file!")
+
 
 ### In 4.2.1 version, the output star file has *rlnImageName at first column, *rlnMicrographName at second column.
 def change_image_path(file_1, file_2):
@@ -57,16 +36,26 @@ def change_image_path(file_1, file_2):
     current_path = os.path.join(os.getenv('PWD'), '')
     for line_number in range(particles_df.shape[0]):
         image = particles_df.loc[line_number, '_rlnImageName']
-        if image.endswith('.mrc'):
-            image = image + 's'
-        
+    
+            
+        # old csparc2star output has '>' at the beginning of the image name
         image = image.replace('>', '')
         image = image.replace('@', '@'+current_path) 
-        particles_df.loc[line_number, '_rlnImageName'] = image
-		
-		
 
-        
+        if image.endswith('.mrc'):
+            original_image = image.split('@')[1]
+            image = image + 's'
+            image_path = original_image + 's'
+
+            particles_df.loc[line_number, '_rlnImageName'] = image
+            # check if image_path exist
+            if not os.path.exists(image_path):
+                # create symbolic link to the original image
+                os.symlink(original_image, image_path)
+            else:
+                continue
+                
+
         if '_rlnMicrographName' in particles_df.columns:
             micrograph = particles_df.loc[line_number, '_rlnMicrographName']
             micrograph = micrograph.replace('>', '')

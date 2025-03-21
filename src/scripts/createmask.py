@@ -44,10 +44,11 @@ def wedge():
 
 
 def sphere():
-	boxsize=360
-	center=int(sys.argv[1])
-	radius=int(sys.argv[2])
-	a=np.zeros((boxsize,boxsize,boxsize))
+	boxsize = int(sys.argv[1])
+	center = int(sys.argv[2])
+	radius = int(sys.argv[3])
+	pixel_size = float(sys.argv[4])
+	a = np.zeros((boxsize,boxsize,boxsize))
 
 	z, y, x = np.indices((boxsize, boxsize, boxsize))
 	mask = ((x-center)**2 + (y-boxsize/2+0.5)**2 + (z-boxsize/2+0.5)**2 < radius**2)
@@ -60,6 +61,7 @@ def sphere():
 	with mrcfile.new('sphere_{}_x{}_r{}.mrc'.format(boxsize, center, radius)) as mrc:
 		a = a.astype(np.float32)
 		mrc.set_data(a)
+		mrc.voxel_size = pixel_size
 
 
 def rectangular():
@@ -83,5 +85,8 @@ def rectangular():
 	with mrcfile.new('rectangular_{}_length{}_h{}.mrc'.format(boxsize, length, height)) as mrc:
 		mrc.set_data(a)
 
-sphere()
-#cylinder()
+def main():
+	sphere()
+
+if __name__ == '__main__':
+	main()

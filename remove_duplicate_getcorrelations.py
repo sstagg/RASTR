@@ -2,7 +2,7 @@
 
 import cupy as cp
 import numpy as np
-from starparse import StarFile
+from common.starparse import StarFile
 from cupyx.scipy.signal import correlate
 import sys
 from matplotlib import pyplot as plt

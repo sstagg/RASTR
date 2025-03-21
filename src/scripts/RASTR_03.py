@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 #### script for RASTR by Ruizi
 #### this script takes a pre-made mask. 
-#### a typical run command: ./RASTR_02.py --star_in run_it005_data.star  --model run_it005_class001azavg.mrc  --angpix 2.02  -k -o rootname -ma spheremask.mrc  -al 0,90,180,270  --pad 3
+#### a typical run command: RASTR_03.py --star_in run_it005_data.star  --model run_it005_class001azavg.mrc  --angpix 2.02  -k -o rootname -ma spheremask.mrc  -al 0,90,180,270  --pad 3
 
 
-import numpy as np
 import sys
 import os, errno
 import subprocess
@@ -14,8 +13,12 @@ import copy
 from multiprocessing import Process
 import mrcfile
 import cupy as cp
-from cupyx.scipy.ndimage import gaussian_filter, rotate
-from starparse import StarFile
+from cupyx.scipy.ndimage import gaussian_filter
+import pandas as pd
+from src.common.starparse import StarFile
+from src.common.volume_utils import rotate_volume
+from src.common.mrc_utils import readslice
+
 ##Functions
 
 #Makes a directory
@@ -39,16 +42,6 @@ def flip(maskvolume):
 	else:
 		print ('not binary mask')
 	
-### using scipy to rotate a 3d matrix with rot, tilt, psi angle, rotation order verified using cisTEM generate.
-def volumerotation( volume, rot=0, tilt=0, psi=0, order=1):
-	newvolume = copy.deepcopy(volume)
-	if rot != 0:
-		newvolume = rotate( newvolume, rot, axes=[1,2], order=order, reshape=False)
-	if tilt != 0:	
-		newvolume = rotate( newvolume, -tilt, axes=[0,2], order=order, reshape=False)
-	if psi != 0:
-		newvolume = rotate( newvolume, psi, axes=[1,2], order=order, reshape=False)
-	return newvolume
 
 ### parse the top part of star file, return a dictionary with different column and number. eg paracolumn['rot']=8, then the 9th value in a row represent rot angle.
 def column(filename):
@@ -105,10 +98,10 @@ def subtraction(subtractionmodel, tempangle, angpix, starfilename, outputfilenam
 def setupLogger(results):
 
 	logging.basicConfig(level=logging.DEBUG,
-	                    format   = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
-	                    datefmt  = '%m-%d %H:%M',
-	                    filename = results.output_rootname+'.log',
-	                    filemode = 'w')
+						format   = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+						datefmt  = '%m-%d %H:%M',
+						filename = results.output_rootname+'.log',
+						filemode = 'w')
 	#define a handler which writes INFO messages or higher to the sys.stderr
 	console = logging.StreamHandler()
 	console.setLevel(logging.INFO)
@@ -139,21 +132,19 @@ def setupLogger(results):
 
 	return logger1, logger2, logger3, logger4
 
-def readslice( image ):
-	with mrcfile.mmap(image[1], mode='r') as imagestack:
-		zslice = int(image[0]) - 1
-		imagearray = imagestack.data[zslice]
-	imagearray_new = cp.asarray(imagearray)
-	return imagearray_new
 
-def relionmask(angle, whitemaskfile, maskprojectionfile, angpix, gauss, initial_star_in, mrcs_masked):
+
+def relionmask(angle, angpix, gauss, initial_star_in):
 	logging.info('starting extraction for angle: '+ str(angle))
 	logging.info('projecting masks')
+	whitemaskfile = whitemasks[angle]
+	maskprojectionfile = maskprojection[angle]
+	newfile = mrcs_masked[angle]
+
 	maskproj_run='relion_project --i '+whitemaskfile+'  --o '+maskprojectionfile+'  --angpix '+angpix+' --ang '+initial_star_in+' --pad 3'
 	run_command(maskproj_run)
 	logging.info('done projection masks for angle: '+str(angle))
 
-	newfile=mrcs_masked
 	
 	mask_starfile = StarFile( maskprojectionfile+'.star' )
 	mask_particles_df = mask_starfile.particles_df
@@ -162,7 +153,7 @@ def relionmask(angle, whitemaskfile, maskprojectionfile, angpix, gauss, initial_
 
 	with mrcfile.open(maskprojectionfile+'.mrcs') as mrc:
 		mrcsshape = mrc.data.shape
-	print (mrcsshape)
+	
 	with mrcfile.new_mmap(newfile, shape=mrcsshape, mrc_mode=2, overwrite=True) as mrcobj:
 		for linenumber, particle in particles_df.iterrows():
 			image = particle['_rlnImageName'].split('@')
@@ -222,8 +213,6 @@ def parseOptions():
 						help=' input list of angles, separate by comma')
 	parser.add_argument('-ma','--mask', type=str, action='store',default=None,dest='mask',
 						help='input mask for refinement, make the region to be kept 1')
-	parser.add_argument('-sin','--single',action='store_true',default=False,dest='single', 
-						help='single thread mode, default is multi-thread mode')
 	parser.add_argument('--phi', type=float, action='store', default=None, dest='phi',
 						help='starting phi angle for rotation, default is using star file angles')
 	results = parser.parse_args()
@@ -235,42 +224,39 @@ def parseOptions():
 		sys.exit()
 	
 	return results
+
+def make_subtraction_models(input_model, whitemask, angles, order):
+	### making subraction models
+	logging.info('making subtraction models')
+	model_volume = cp.asarray(mrcfile.read(input_model))
+	for angle in angles:
+		subtractionfile = subtractionmodels[angle]
+		b_maskfile = blackmasks[angle]
+		w_maskfile = whitemasks[angle]
 		
-#Main program
-def main():
-	#Input arguments
-	results = parseOptions()
-	
-	#Create scratch folder
-	scratch = 'scratch'
-	scratch_num = 2
-	if os.path.isdir(scratch) is True:
-		while os.path.isdir(scratch) is True:
-			scratch = 'scratch'+str(scratch_num)
-			scratch_num+=1
-	results.scratch = scratch
-	make_tmp(scratch)
+		whitemaskvolume = rotate_volume(whitemask, rot=angle, tilt=0, psi=0, order=order)
+		whitemaskvolume = gaussian_filter(whitemaskvolume,sigma=3)
+		whitemaskvolume[whitemaskvolume>1] = 1.0
+		whitemaskvolume[whitemaskvolume<0] = 0.0
+		blackmaskvolume = flip(whitemaskvolume)
+
+		mrcfile.write(w_maskfile, data=whitemaskvolume.get())
+		mrcfile.write(b_maskfile, data=blackmaskvolume.get())
+
+		subtractionvolume = blackmaskvolume * model_volume
+		mrcfile.write(subtractionfile, data=subtractionvolume.get())
+		logger1.info(subtractionfile)
+	logging.info('Done making subtraction models')
 
 
-	#get box size first because some defaults depend on it:
-	input_model = mrcfile.read(results.model)
-	input_model = cp.asarray(input_model.data)
-	box_size = int(input_model.shape[0])
-
-	#set defaults
-	pad = results.pad
-	order = results.order
-	output_rootname = results.output_rootname
-	angles=results.anglelist.split(',')
-	for i in range(len(angles)):
-		angles[i]=float(angles[i])
-
-	subtractionmodels={}
-	blackmasks={}
-	whitemasks={}
-	mrcs_subtracted={}
-	maskprojection={}
-	mrcs_masked={}
+def set_up_temp_filenames(scratch, angles, results):
+	global subtractionmodels, blackmasks, whitemasks, mrcs_subtracted, maskprojection, mrcs_masked
+	subtractionmodels = {}
+	blackmasks = {}
+	whitemasks = {}
+	mrcs_subtracted = {}
+	maskprojection = {}
+	mrcs_masked = {}
 	for angle in angles:
 		subtractionmodels[angle] = scratch+'/'+'subtractionmodel'+str(angle)+'.mrc'
 		blackmasks[angle] = scratch + '/blackmask' + str(angle) + '.mrc'
@@ -278,9 +264,93 @@ def main():
 		mrcs_subtracted[angle] = scratch + '/' + results.output_rootname + '_' + str(angle) + '_subtracted'
 		maskprojection[angle]=scratch+'/maskprojection_'+str(angle)
 		mrcs_masked[angle]=mrcs_subtracted[angle]+'_masked.mrcs'
+
+def merge_star_file(output_tmp_star, angles):
+	"""
+	Merge multiple star files together, adjust rotation angles, and update image paths.
+	
+	Parameters:
+	-----------
+	output_rootname : str
+		Root name for the output file
+	mrcs_subtracted : dict
+		Dictionary mapping angles to file paths without .star extension
+	angles : list
+		List of angles to process
+	"""
+	# Initialize a new StarFile from the first angle's star file
+	first_star = StarFile(mrcs_subtracted[angles[0]] + '.star')
+	
+	# Create a new empty StarFile for the merged result
+	merged_star = StarFile(None)
+	
+	# Copy the optics data from the first star file
+	merged_star.optics_df = first_star.optics_df
+	
+	# Initialize an empty list to store all particle DataFrames
+	all_particles = []
+	
+	# Process each angle and its corresponding star file
+	for angle in angles:
+		# Read the star file for this angle
+		current_star = StarFile(mrcs_subtracted[angle] + '.star')
+		
+		# Make a copy of the particles DataFrame to avoid modifying the original
+		particles_df = current_star.particles_df
+		
+		# Get column names
+		column_names = particles_df.columns.tolist()
+
+		# Update rotation angles by adding the current angle and taking modulo 360
+		if '_rlnAngleRot' in particles_df.columns:
+			particles_df['_rlnAngleRot'] = (particles_df['_rlnAngleRot'] + angle) % 360.0
+		
+		# Update image paths: replace the last 5 characters with '_masked.mrcs'
+		if '_rlnImageName' in particles_df.columns:
+			particles_df['_rlnImageName'] = particles_df['_rlnImageName'].apply(
+				lambda x: x[:-5] + '_masked.mrcs'
+			)
+		
+		# Add this DataFrame to our list
+		all_particles.append(particles_df)
+	
+	# Concatenate all particle DataFrames
+	if all_particles:
+		merged_star.particles_df = pd.concat(all_particles, ignore_index=True)
+	
+	# Write the merged star file
+	merged_star.write(output_tmp_star)
+	
+	print(f"Merged star file written to {output_tmp_star}")
+
+#Main program
+def main():
+	#Input arguments
+	results = parseOptions()
+	
+	#Create scratch folder
+	scratch = 'RASTR_scratch'
+	scratch_num = 2
+	if os.path.isdir(scratch) is True:
+		while os.path.isdir(scratch) is True:
+			scratch = 'RASTR_scratch'+str(scratch_num)
+			scratch_num+=1
+	results.scratch = scratch
+	make_tmp(scratch)
+	
+	#set defaults
+	pad = results.pad
+	order = results.order
+	output_rootname = results.output_rootname
+	angles=results.anglelist.split(',')
+	angles=[float(i) for i in angles]
+
+	#set up temp filenames
+	set_up_temp_filenames(scratch, angles, results)
 	
 
 	#create a log file
+	global  logger1, logger2, logger3, logger4
 	logger1,logger2,logger3,logger4=setupLogger(results)
 
 	#####             #####
@@ -294,51 +364,23 @@ def main():
 	else:
 		logging.info('phi angle provided, changing star file')
 		initial_star_in = output_rootname+'_tmp_phi.star'
-		from changestar import parserInput, change_star_file_values
+		from src.scripts.changestar import change_star_file_values
 		change_star_file_values(['--i', str(results.star_in), '--o', initial_star_in, '-rot', str(results.phi)])
 		logging.info('Done editing star file')
 
 	whitemask = mrcfile.read(results.mask)
 	whitemask = cp.asarray(whitemask.data)
 
-	### making subraction models
-	logging.info('making subtraction models')
-	for angle in angles:
-		subtractionfile = subtractionmodels[angle]
-		b_maskfile = blackmasks[angle]
-		w_maskfile = whitemasks[angle]
-		
-		whitemaskvolume = volumerotation(whitemask, rot=angle, tilt=0, psi=0, order=order)
-		whitemaskvolume = gaussian_filter(whitemaskvolume,sigma=3)
-		whitemaskvolume[whitemaskvolume>1] = 1.0
-		whitemaskvolume[whitemaskvolume<0] = 0.0
-		blackmaskvolume = flip(whitemaskvolume)
 
-		mrcfile.write(w_maskfile, data=whitemaskvolume.get())
-		mrcfile.write(b_maskfile, data=blackmaskvolume.get())
-
-		subtractionvolume = blackmaskvolume*input_model
-		mrcfile.write(subtractionfile, data=subtractionvolume.get())
-		logger1.info(subtractionfile)
-	logging.info('Done making subtraction models')
-
+	make_subtraction_models(results.model, whitemask, angles, order)
 
 
 	####subtraction
-	if results.single:
-		for angle in angles:
-			outputfilename = mrcs_subtracted[angle] 
-			subtraction(subtractionmodels[angle], angle, results.angpix, initial_star_in, outputfilename, pad)
-	else:
-		processes = []
-		for angle in angles:
-			outputfilename = mrcs_subtracted[angle]
-			p = Process(target=subtraction, args=(subtractionmodels[angle], angle, results.angpix, initial_star_in, outputfilename, pad))
-			p.start()
-			processes.append(p)
-
-		for p in processes:
-			p.join()
+	
+	for angle in angles:
+		outputfilename = mrcs_subtracted[angle] 
+		subtraction(subtractionmodels[angle], angle, results.angpix, initial_star_in, outputfilename, pad)
+	
 	logging.info('Done with subtraction')
 		
 	#### mask target region
@@ -347,74 +389,23 @@ def main():
 	logging.info('')
 	logger3.info('Extracting particles')
 
-
-	paracolumn=column(initial_star_in)
 	
 #angle, whitemaskfile, maskprojectionfile, angpix, initial_star_in, mrcs_masked
-	if results.single:
-		for angle in angles:
-			relionmask(angle, whitemasks[angle], maskprojection[angle], results.angpix, results.gauss, initial_star_in, mrcs_masked[angle])
-	else:
-		processes = []
-		for angle in angles:
-			p=Process(target=relionmask,args=(angle, whitemasks[angle], maskprojection[angle], results.angpix, results.gauss, initial_star_in, mrcs_masked[angle],))
-			p.start()
-			processes.append(p)
-		for p in processes:
-			p.join()
+
+	for angle in angles:
+		relionmask(angle, results.angpix, results.gauss, initial_star_in)
+
 	logging.info('Done with masking')
 	
 
 	### join star file together
-	outputstar=open(output_rootname+'_tmp.star','w')
-	firstanglestar=open(mrcs_subtracted[angles[0]]+'.star','r')
-	lines=firstanglestar.readlines()
-	firstanglestar.close()
-	### this loop for writing header parts
+	output_tmp_star = output_rootname+'_tmp.star'
+	
+	merge_star_file( output_tmp_star, angles)
 
 
-	opticstart=False
-	particlesstart=False
-	for line in lines:
-		words=line.split()
-		if line=='data_optics\n':
-			opticstart=True
-		if line=='data_particles\n':
-			particlesstart=True
-	#### when in optics line, write them directly into new star file
-		if opticstart and not particlesstart:
-			outputstar.write(line)
-	### when in particle column part, write column part
-		elif particlesstart and len(words)<=2:
-			outputstar.write(line)
-	### this loop for writing data lines
-	for angle in angles:
-		fileobj=open(mrcs_subtracted[angle]+'.star','r')
-		lines=fileobj.readlines()
-		fileobj.close()
-		opticstart=False
-		particlesstart=False
-		for line in lines:
-			try:
-				if line[0]=='#':
-					continue
-			except:
-				pass
-			words=line.split()
-			if line=='data_optics\n':
-				opticstart=True
-			if line=='data_particles\n':
-				particlesstart=True
-			### skip optic part and particle column part, write only data lines
-			if opticstart and particlesstart and len(words)>2:
-			#print words
-				words[paracolumn['rot']]=str((float(words[paracolumn['rot']])+angle)%360.0)
-				words[paracolumn['image']]=words[paracolumn['image']][:-5]+'_masked.mrcs'
-				newline=' '.join(words)+'\n'
-				outputstar.write(newline)	
-	outputstar.close()
 	### join stacks together
-	relion_preprocess_run='relion_stack_create --i '+output_rootname+'_tmp.star  --o '+output_rootname + '  --one_by_one'
+	relion_preprocess_run='relion_stack_create --i '+output_tmp_star+'  --o '+output_rootname + '  --one_by_one'
 	run_command(relion_preprocess_run)
 
 

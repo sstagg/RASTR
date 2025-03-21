@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import cupy as cp
 import pandas as pd
-from starparse import StarFile
+from common.starparse import StarFile
 import sys
 
 def process_chunk(chunk, repeats):

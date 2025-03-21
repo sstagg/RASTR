@@ -3,7 +3,7 @@ import mrcfile
 import cupy as cp
 from cupyx.scipy.ndimage import rotate, shift
 import numpy as np
-from starparse import StarFile
+from common.starparse import StarFile
 import pandas as pd
 from matplotlib import pyplot as plt
 import sys

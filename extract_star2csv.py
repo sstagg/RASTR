@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-from starparse import StarFile
+from common.starparse import StarFile
 import pandas as pd
 import sys
 import argparse

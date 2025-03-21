@@ -7,7 +7,7 @@ import argparse
 import mrcfile
 import pandas as pd
 from matplotlib import pyplot as plt
-from starparse import StarFile
+from common.starparse import StarFile
 from cupyx.scipy.ndimage import rotate, shift, zoom, gaussian_filter
 import os
 import csv
