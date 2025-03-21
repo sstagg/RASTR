@@ -5,11 +5,11 @@ Also contains code for  SPOT-RASTR, diameTR and helpful python scripts for cryo-
 ## Installation
 ### Requirements
 - python >= 3.6
-- cupy, numpy, scipy, matplotlib, tkinter, pandas
+- cupy, numpy, scipy, matplotlib, tkinter, pandas, mrcfile, setuptools
 - Relion >= 3.0
 - We recommend create a conda environment for RASTR
     ```bash
-    conda create --name RASTR python=3.9 scipy cupy numpy matplotlib tkinter pandas
+    conda create --name RASTR python=3.9 scipy cupy numpy matplotlib tkinter pandas mrcfile setuptools
     ```
 
 ### installation
