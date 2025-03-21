@@ -9,7 +9,7 @@ Also contains code for  SPOT-RASTR, diameTR and helpful python scripts for cryo-
 - Relion >= 3.0
 - We recommend create a conda environment for RASTR
     ```bash
-    conda create --name RASTR python=3.9 scipy cupy numpy matplotlib tkinter pandas mrcfile setuptools
+    conda create --name RASTR python=3.9 scipy cupy numpy matplotlib tk pandas mrcfile setuptools -c conda-forge
     ```
 
 ### installation
@@ -33,19 +33,19 @@ Also contains code for  SPOT-RASTR, diameTR and helpful python scripts for cryo-
 <summary>RASTR</summary>
 A star file containing particle information is used as input, represented by 'particles.star'. During the process, two parameter optimization windows will pop up. If the default values yield poor performance, refer to 'diameTR' for optimization guidance.
 
-- To get the psi angles first,
+- 1 To get the psi angles first,
     ```bash
     # Go the main path
     cd /path/for/particles/star
     diameTR --i particles.star --o particles_p -p
     ```
-- Determine shift and diameter.
+- 2 Determine shift and diameter.
     ```bash
     diameTR --i particles_p.star --o particles_pds -d -s
     ```
     Diameter distribution window will pop up for you to thresholding the diamters.
 
-- Create azimuthal average model
+- 3 Create azimuthal average model
     ```bash
     # Assign values for tilt, rot angles
     changestar --i particles_pds.star --o particles_pds.star -rot r360 -tilt 90
@@ -57,7 +57,7 @@ A star file containing particle information is used as input, represented by 'pa
     azavg particles.mrc
     ```
 
-- Get correct weighing
+- 4 Get correct weighing
 
     In Relion GUI, choose 3D classification, change below parameters.
 
@@ -69,13 +69,13 @@ A star file containing particle information is used as input, represented by 'pa
 
     Run!
 
-- Create mask
+- 5 Create mask
     ```bash
     # Create a sphere mask
     createmask  boxsize center radius pixel_size
     ```
 
-- Create RASTR particles
+- 6 Create RASTR particles
     ```bash
     # Go to the Relion 3Dclass job path
     azavg run_it005_class001.mrc
@@ -94,7 +94,14 @@ A star file containing particle information is used as input, represented by 'pa
 <details>
 <summary>SPOT-RASTR</summary>
 <br>
-Under construction.
+- Have your particle stack and star file ready.
+
+- Follow the same steps of 1-6 of RASTR to create subtracted particles
+
+- Remove duplicates from overlapping filament particle picking
+    ```bash
+    Under construction.
+    ```
 
 </details>
 
