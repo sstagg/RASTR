@@ -129,6 +129,8 @@ def setupLogger(results):
 	logging.info('output rootname  = '+ results.output_rootname)
 	logging.info('keep scratch     = '+ str(results.keep_scratch))
 	logging.info('scratch folder   = '+ results.scratch)	
+	logging.info('mask             = '+ results.mask)
+	logging.info('gauss		       = '+ str(results.gauss))
 
 	return logger1, logger2, logger3, logger4
 
@@ -163,12 +165,19 @@ def relionmask(angle, angpix, gauss, initial_star_in):
 			singleslice = readslice(image)
 			maskslice = readslice(mask_image)
 
+			image_mean = cp.mean(singleslice)
+
 			maskslice = gaussian_filter(maskslice,sigma=gauss)
 			threshold = 8
 			maskslice[maskslice<=threshold] = 0.0
 			maskslice[maskslice>threshold] = 1.0
 
 			maskedslice = maskslice*singleslice
+
+			# fill zero with mean
+			#maskedslice[maskedslice==0] = image_mean
+
+
 			mrcobj.data[i-1]=maskedslice.get()
 				
 	logging.info('done extraction for angle: '+str(angle))
@@ -325,6 +334,15 @@ def merge_star_file(output_tmp_star, angles):
 
 #Main program
 def main():
+	# check requirements
+	# check if relion in path
+	relion_check = 'which relion_project'
+	process = subprocess.Popen(relion_check.split(), stdout=subprocess.PIPE)
+	output, error = process.communicate()
+	if len(output) == 0:
+		print ('Relion not in path, please check your installation')
+		sys.exit()
+
 	#Input arguments
 	results = parseOptions()
 	

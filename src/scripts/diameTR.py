@@ -30,7 +30,7 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 	start_time = time.time()
 
 	angle_maxs = cp.zeros(particle_number)
-	print("psi iteration 1 at:")
+	logger.info("psi iteration 1 at:")
 	for line_number, particle in particles_df.iterrows():
 		
 		print(f'{line_number + 1} /{particle_number}', end='\r')
@@ -56,8 +56,8 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 			#pyplot.plot()
 			#print(f"{line_number+1}, angle_max: {angle_max}, star: {particles_df.loc[line_number, '_rlnAnglePsi']}")
 	print(f'{particle_number} /{particle_number}')
-	print("done        ")
-	print("time for psi finding: ", time.time() - start_time)
+	logger.info("psi determination done        ")
+	logger.info("time for psi finding: ", time.time() - start_time)
 
 	return angle_maxs.get()
 
@@ -221,7 +221,7 @@ def find_peak_strategy( array_1d, min_gap=80):
 
 def find_diameter( particles_df, sigma, min_gap, resolution=0):
 	
-	diameters={'_rlnDiameterByRASTR':[]}
+	diameters={'_rlndiameTR':[]}
 	particle_number = particles_df.shape[0]
 	print("finding diameter: ")
 	for line_number in range(particle_number):
@@ -236,7 +236,7 @@ def find_diameter( particles_df, sigma, min_gap, resolution=0):
 
 		diameter = abs((peak_one - peak_two) * pixel_size)
 		
-		diameters['_rlnDiameterByRASTR'].append(diameter)
+		diameters['_rlndiameTR'].append(diameter)
 	print("done           ")
 	return diameters
 
@@ -341,12 +341,12 @@ def tube_subtraction( starfile, model_2d, outputfilename, separate=False, diamet
 		# Keep only particles with valid diameters
 		original_order = particles_df.index.tolist()
 		
-		particles_df = particles_df.loc[ particles_df['_rlnDiameterByRASTR'] >= 0 ]
-		particles_df = particles_df.loc[ particles_df['_rlnDiameterByRASTR'] <= 450 ]
+		particles_df = particles_df.loc[ particles_df['_rlndiameTR'] >= 0 ]
+		particles_df = particles_df.loc[ particles_df['_rlndiameTR'] <= 450 ]
 		
 		# Compute the bins for historgram-like separation
-		min_diameter = particles_df['_rlnDiameterByRASTR'].min()
-		max_diameter = particles_df['_rlnDiameterByRASTR'].max()
+		min_diameter = particles_df['_rlndiameTR'].min()
+		max_diameter = particles_df['_rlndiameTR'].max()
 		bins = list(range(int(min_diameter), int(max_diameter), diameter_step))
 
 		# Split dataframe based on diamter and call the function recursively
@@ -355,7 +355,7 @@ def tube_subtraction( starfile, model_2d, outputfilename, separate=False, diamet
 			lower_bound = bins[i]
 			upper_bound = bins[i+1]
 			starfile_subset = starfile.copy()
-			particles_df_subset = particles_df.loc[ (particles_df['_rlnDiameterByRASTR'] >= lower_bound) & (particles_df['_rlnDiameterByRASTR'] < upper_bound) ]
+			particles_df_subset = particles_df.loc[ (particles_df['_rlndiameTR'] >= lower_bound) & (particles_df['_rlndiameTR'] < upper_bound) ]
 			starfile_subset.particles_df = particles_df_subset
 			starfile_subset.optics_df = optics_df
 			if not particles_df_subset.empty:
@@ -477,80 +477,160 @@ def parseOptions():
 	return (results)
 
 
+def setup_logger(output_rootname):
+    """Set up the logger for the script."""
+    log_file = f"{output_rootname}_log.txt"
+    
+    # Create logger
+    logger = logging.getLogger('RASTR')
+    logger.setLevel(logging.INFO)
+    
+    # Create file handler
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    
+    # Create console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    # Create formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+def log_parameters(logger, args_dict, stage="input", **kwargs):
+    """Log input arguments or optimized parameters."""
+    if stage == "input":
+        logger.info("Input arguments:")
+        for arg, value in args_dict.items():
+            logger.info(f"  {arg}: {value}")
+    else:
+        logger.info(f"Optimized parameters for {stage}:")
+        for param, value in kwargs.items():
+            logger.info(f"  {param}: {value}")
+
 
 def main():
-
+	# Parse Options
 	results = parseOptions()
+
+	# Set up logger
+	global logger
+	logger = setup_logger(results.output_rootname)
+
+	# Log input arguments
+	args_dict = vars(results)
+	log_parameters(logger, args_dict, stage="input")
+
+	# Start timing the execution
+	start_time = time.time()
+	logger.info("Starting RASTR...")
+
 
 	starfile = StarFile( results.input_star )
 	optics_df = starfile.optics_df
 
 	if results.model is not None:
+		logger.info(f"Loading model from {results.model}")
 		model = mrcfile.read(results.model)
 		model = cp.asarray(model)
 		if model.ndim == 3:
 			model_3d = model
 			model_2d = project_volume ( volume=model_3d, rot=0, tilt=90, psi=0, order=3 )	
+			logger.info("Model is 3D, projecting to 2D")
 		elif model.ndim == 2:
 			model_2d = model
+			logger.info("Loaded 2D model")
 	else:
 		model_2d = None
+		logger.info("No model provided")
 
 
 	if results.particle_number is not None:
+		logger.info(f"Sampling {results.particle_number} particles from the star file")
 		starfile.particles_df = starfile.particles_df.sample(n=int(results.particle_number)).reset_index(drop=True)
 		
 	particles_df = starfile.particles_df
 
 	
 	pixel_size = float(optics_df.loc[0,'_rlnImagePixelSize'])
+	logger.info(f"Pixel size: {pixel_size} A/pixel")
 
-	print ( 'parsing finished, start calculation')
+	logger.info('Parsing finished, starting calculation')
+
+	
 
 	if results.justclassify:
+		logger.info("Starting threshold window classification")
 		from src.common.windows_utils import choose_threshold_window
 		threshold_window = choose_threshold_window( starfile.particles_df )
 		starfile.particles_df = threshold_window.particles_df
+		logger.info("Classification finished")
 
 	if results.find_psi:
+		logger.info("Starting psi optimization")
 		from src.common.windows_utils import optimize_angle_finding
 		optimizer_psi = optimize_angle_finding( starfile )
 		optimizer_psi.start_window()
 		args = optimizer_psi.report()
+		log_parameters(logger, {}, stage='PSI angle optimization', **args)
 		
 	if results.find_diameter:
+		logger.info("Starting diameter optimization")
 		from src.common.windows_utils import optimize_diameter_parameter
 		optimized = False
 		while not optimized:
 			optimizer = optimize_diameter_parameter( particles_df, pixel_size )
 			optimizer.startwindow()
 			sigma, min_gap, lowpass, optimized = optimizer.report()
+			log_parameters(logger, {}, stage='Diameter optimization', sigma=sigma, min_gap=min_gap, lowpass=lowpass)
 			pyplot.close()
+		logger.info("Diameter optimization finished")
 
 	if results.find_psi:
+		logger.info("Starting psi angle finding")
 		
 		updated_psi_values = find_psi( starfile, args, model_2d, mode='fast' )
 	
 		starfile.particles_df['_rlnAnglePsi'] = updated_psi_values
 		particles_df = starfile.particles_df
+
 		
 
 
 	if results.find_diameter:
+		logger.info("Starting diameter calculation")
 		time_start = time.time()
 		diameters = find_diameter( particles_df, sigma, min_gap, lowpass)
-		print(f'diameter calculation finished in {time.time() - time_start} seconds')
+		logger.info(f'diameter calculation finished in {time.time() - time_start} seconds')
 		diameters_df = pd.DataFrame(diameters)
 		# If the diameter column already exists, replace it
-		if '_rlnDiameterByRASTR' in starfile.particles_df.columns:
-			starfile.particles_df['_rlnDiameterByRASTR'] = diameters_df['_rlnDiameterByRASTR']
+		if '_rlndiameTR' in starfile.particles_df.columns:
+			starfile.particles_df['_rlndiameTR'] = diameters_df['_rlndiameTR']
 		else:
 			starfile.particles_df = pd.concat([particles_df, diameters_df], axis=1)
 		threshold_window = choose_threshold_window( starfile.particles_df )
 		starfile.particles_df = threshold_window.particles_df
 
+        # Log diameter statistics
+        if '_rlndiameTR' in starfile.particles_df.columns:
+            diameter_stats = {
+                'mean': starfile.particles_df['_rlndiameTR'].mean(),
+                'std': starfile.particles_df['_rlndiameTR'].std(),
+                'min': starfile.particles_df['_rlndiameTR'].min(),
+                'max': starfile.particles_df['_rlndiameTR'].max()
+            }
+            log_parameters(logger, {}, stage="diameter statistics", **diameter_stats)
+
 
 	if results.minimize_shift:
+		logger.info("Starting shift minimization")
 		shifts = [ minimize_shift( starfile.particles_df.iloc[line_number], sigma, min_gap) for line_number in range(starfile.particles_df.shape[0])]
 		xshifts, yshifts = zip(*shifts)
 		#print(xshifts)
@@ -558,9 +638,11 @@ def main():
 		starfile.particles_df['_rlnOriginXAngst'] = xshifts
 		starfile.particles_df['_rlnOriginYAngst'] = yshifts
 		particles_df = starfile.particles_df
+		logger.info("Shift minimization finished")
 
 
 	if results.showaverage:
+		logger.info("Calculating and saving average image")
 		average = get_average( optics_df, particles_df )
 		average = rotate_image( average, psi=-90, x=0, y=0, order=3)
 		model_2d = average
@@ -569,6 +651,7 @@ def main():
 		with mrcfile.new(average_name, overwrite=True) as f:
 			f.set_data( average.get().astype('float32'))
 			f.voxel_size = pixel_size
+		logger.info(f"Average image saved to {average_name}")
 		pyplot.imshow(average.get(), origin='lower', cmap='gray')
 		pyplot.show()
 
@@ -580,17 +663,21 @@ def main():
 		#starfile = tube_subtraction_projection( starfile, results.output_rootname+'_subtracted_projection.mrcs')		
 
 	if results.average_power_spectrum:
+		logger.info("Calculating average power spectrum")
 		time_start = time.time()
 		average_power = get_average_power( particles_df )
 		time_end = time.time()
+		output_file = results.output_rootname + '_average_power.mrc'
 		pyplot.imshow(average_power.get(), origin='lower', cmap='gray')
 		pyplot.show()
-		with mrcfile.new(results.output_rootname + '_average_power.mrc', overwrite=True) as f:
+		with mrcfile.new(output_file, overwrite=True) as f:
 			f.set_data( average_power.get().astype('float32'))
 			f.voxel_size = pixel_size
-		print(f'Average power spectrum calculated in {time_end - time_start} seconds')
-
+		logger.info(f'Average power spectrum calculated in {time_end - time_start} seconds')
+		logger.info(f"Average power spectrum saved to {output_file}")
 	starfile.write( results.output_rootname + '.star')
+	logger.info(f"Output star file saved to {results.output_rootname}.star")
+	logger.info("diameTR finished")
 
 if __name__ == '__main__':
 	main()

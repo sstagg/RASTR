@@ -44,7 +44,7 @@ class StarFile:
 
 	def create_dataframe_from_data(self, headers, data_block):
 		data = StringIO(data_block)
-		df = pd.read_csv(data, names=headers, delim_whitespace=True)
+		df = pd.read_csv(data, names=headers, sep='\s+')
 
 		return df
 

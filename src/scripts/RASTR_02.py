@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+### legacy code, not used in the pipeline
 #### script for RASTR by Ruizi
 #### this script takes a pre-made mask. 
 #### a typical run command: ./RASTR_02.py --star_in run_it005_data.star  --model run_it005_class001azavg.mrc  --angpix 2.02  -k -o rootname -ma spheremask.mrc  -al 0,90,180,270  --pad 3
