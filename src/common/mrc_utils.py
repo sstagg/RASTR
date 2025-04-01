@@ -3,6 +3,8 @@
 from src.common.volume_utils import rotate_image
 import cupy as cp
 import mrcfile
+from scipy import fftpack
+import numpy as np
 
 
 ### Input image should be a two element list with slice number first, image file name second.
@@ -36,12 +38,10 @@ def get_power_spectrum( image_array):
 
 def get_average_power(particles_df):
 	num_particles = particles_df.shape[0]
+	
 	for index, row in particles_df.iterrows():
-		#processed_count = index + 1
-		
 		image = row['_rlnImageName'].split('@')
 		psi = float(row['_rlnAnglePsi'])
-		#x, y = float(row['_rlnOriginXAngst']) / pixel_size, float(row['_rlnOriginYAngst']) / pixel_size
 		image_array = readslice(image)
 		image_array = rotate_image(image_array, psi=psi, order=1)
 		power_spectrum = get_power_spectrum(image_array)
@@ -50,7 +50,7 @@ def get_average_power(particles_df):
 			average_power = power_spectrum
 		else:
 			average_power += power_spectrum
-		print(f"Processed {processed_count}/{num_particles} particles", end='\r')
+		print(f"Processed {index+1}/{num_particles} particles", end='\r')
 	average_power /= particles_df.shape[0]
 	average_power = rotate_image(average_power, psi=-90, x=0, y=0, order=3)
 	return average_power

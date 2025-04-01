@@ -14,45 +14,11 @@ import mrcfile
 import sys
 from scipy.ndimage import gaussian_filter
 from common.starparse import StarFile
+from common.volume_utils import low_pass_filter, rotate_image
 
 
 
 
-def rotate_image(image_array, psi=0, x=0, y=0, order=3 ):
-	if x != 0 or y != 0:
-		image_array = shift ( image_array, (y,x), mode='wrap' )
-	if psi != 0:
-		image_array = rotate ( image_array, -psi, axes=(0,1), mode='constant', reshape=False, order=order)
-	return image_array
-
-
-
-def low_pass_filter( image_array, resolution=20, pixel_size=1):
-	box_size = image_array.shape[0]
-	mask_radius = box_size * pixel_size / resolution
-
-	mask = create_circular_mask(box_size, mask_radius)
-	image_fft = np.fft.fft2(image_array)
-	image_fft = np.fft.fftshift(image_fft)
-
-	result = image_fft * mask
-	result = np.fft.ifftshift(result)
-	result = np.fft.ifft2(result).real
-
-	return result.astype(np.float32)
-
-
-def create_circular_mask(box_size, mask_radius):
-	center = box_size // 2
-	y, x = np.ogrid[:box_size, :box_size]
-
-	# Calculate distances from center
-	dist_from_center = np.sqrt((x - center)**2 + (y - center)**2)
-
-	# Create the mask
-	mask = (dist_from_center <= mask_radius).astype(int)
-
-	return mask
 
 
 class ShowStack:

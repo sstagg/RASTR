@@ -8,7 +8,7 @@ import cupy as cp
 import numpy as np
 from cupyx.scipy.signal import correlate
 from cupyx.scipy.ndimage import gaussian_filter
-from src.common.volume_utils import low_pass_filter
+from src.common.volume_utils import low_pass_filter, image_bin
 from src.scripts.diameTR import find_peak
 
 # only used in psi finding optimization for display purpose
@@ -541,11 +541,11 @@ class choose_threshold_window:
 		self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1, pady=5)
 
 		# Bin width 2 angstrom
-		min_val = self.particles_df['_rlnDiameterByRASTR'].min()
-		max_val = self.particles_df['_rlnDiameterByRASTR'].max()
+		min_val = self.particles_df['_rlndiameTR'].min()
+		max_val = self.particles_df['_rlndiameTR'].max()
 		bins = np.arange(min_val, max_val + 2, 2)
 
-		self.ax1.hist(self.particles_df['_rlnDiameterByRASTR'], bins=bins, color='blue', edgecolor='black')
+		self.ax1.hist(self.particles_df['_rlndiameTR'], bins=bins, color='blue', edgecolor='black')
 		self.ax1.set_title('Diameter distribution')
 		self.ax1.set_ylabel('#particles', fontsize=self.label_size)
 		self.ax1.set_xlabel('diameter(A)', fontsize=self.label_size)
@@ -557,8 +557,8 @@ class choose_threshold_window:
 		bin_centers = (bins[:-1] + bins[1:]) / 2
 		mean_defocus = []
 		for i in range(len(bins)-1):
-			mask = (self.particles_df['_rlnDiameterByRASTR'] >= bins[i]) & \
-				   (self.particles_df['_rlnDiameterByRASTR'] < bins[i+1])
+			mask = (self.particles_df['_rlndiameTR'] >= bins[i]) & \
+				   (self.particles_df['_rlndiameTR'] < bins[i+1])
 			mean_def = self.particles_df.loc[mask, '_rlnDefocusU'].mean()
 			mean_defocus.append(mean_def if not np.isnan(mean_def) else 0)
 
@@ -597,7 +597,7 @@ class choose_threshold_window:
 
 	def thresholding(self):
 		df = self.particles_df
-		self.particles_df = df.loc[(df['_rlnDiameterByRASTR'] >= self.min_diameter) & (df['_rlnDiameterByRASTR'] <= self.max_diameter)]
+		self.particles_df = df.loc[(df['_rlndiameTR'] >= self.min_diameter) & (df['_rlndiameTR'] <= self.max_diameter)]
 	
 	def on_mouse_move(self, event):
 		if event.inaxes is not self.ax1 and event.inaxes is not self.ax2:

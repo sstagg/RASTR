@@ -1,3 +1,4 @@
+import cupy as  cp
 from cupyx.scipy.ndimage import rotate, shift
 import copy
 
@@ -46,6 +47,18 @@ def image_bin( img, bin_factor):
 		bin_factor /= 2
 	return img
 
+
+def create_circular_mask(box_size, mask_radius):
+	center = box_size // 2
+	y, x = np.ogrid[:box_size, :box_size]
+
+	# Calculate distances from center
+	dist_from_center = np.sqrt((x - center)**2 + (y - center)**2)
+
+	# Create the mask
+	mask = (dist_from_center <= mask_radius).astype(int)
+
+	return mask
 
 def low_pass_filter( image_array, resolution=20, pixel_size=1):
 	box_size = image_array.shape[0]

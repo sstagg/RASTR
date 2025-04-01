@@ -19,14 +19,15 @@ def main():
 
 	invol = sys.argv[1]
 	outvol = invol.split('.')[0]+'azavg.mrc'
-	parse = parse(sys.argv[2:])
+	parses = parse(sys.argv[2:])
 
 	with mrcfile.open(invol) as mrc:
 		vol = mrc.data
 		vol = vol.astype(numpy.float32)
 		pixel_size = mrc.voxel_size
-	if parse.mask:
-		maskvol = mrcfile.read(parse.mask)
+	# this is for averaging within a mask along z.
+	if parses.mask:
+		maskvol = mrcfile.read(parses.mask)
 		if maskvol.shape != vol.shape:
 			sys.exit('mask shape not consistent with volume')
 		elif maskvol.any()>1 or maskvol.any()<0:
@@ -40,8 +41,8 @@ def main():
 			nvol[:] = average
 			nvol = nvol*maskvol
 			### if voxel outside mask need to be kept
-			if parse.keep:
-				reverse_mask = 1-mask
+			if parses.keep:
+				reverse_mask = 1-maskvol
 				nvol = nvol+(vol*reverse_mask)
 			nvol = nvol.astype(numpy.float32)
 			mrcfile.write(outvol, data=nvol)		

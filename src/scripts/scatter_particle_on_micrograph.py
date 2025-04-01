@@ -2,31 +2,17 @@
 
 from common.starparse import StarFile
 import sys
-import mrcfile
-
 import cupy as cp
-import pandas as pd
 import matplotlib.pyplot as plt
 import os
-import re
-import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
-
 from cupyx.scipy.ndimage import gaussian_filter
+from common.mrc_utils import readslice
+
+
 def extract_micrograph_path(full_path):
     """Extract just the filename from a full path."""
     return os.path.basename(full_path)
 
-def readslice(image):
-	with mrcfile.mmap(image, mode='r') as imagestack:
-		image_array = imagestack.data
-		image_array = cp.asarray(image_array)
-		
-		if image_array.ndim < 2:
-			image_array = cp.asarray(imagestack.data)
-	image_array = gaussian_filter( image_array, sigma=2)
-	image_array = cp.flip( image_array, axis=0)
-	return image_array
 
 def plot_coordinates(df1, df2, output_dir="micrograph_plots"):
     """
@@ -60,6 +46,8 @@ def plot_coordinates(df1, df2, output_dir="micrograph_plots"):
         
         # Load micrograph
         img = readslice(micrograph_path)
+        img = gaussian_filter( img, sigma=2)
+        img = cp.flip( img, axis=0)
         
         # Plot
         plt.figure(figsize=(10, 10))

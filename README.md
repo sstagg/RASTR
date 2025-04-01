@@ -5,11 +5,13 @@ Also contains code for  SPOT-RASTR, diameTR and helpful python scripts for cryo-
 ## Installation
 ### Requirements
 - python >= 3.6
-- cupy, numpy, scipy, matplotlib, tkinter, pandas, mrcfile, setuptools
+- cupy, cudatoolkit, numpy, scipy, matplotlib, tkinter, pandas, mrcfile, setuptools
 - Relion >= 3.0
 - We recommend create a conda environment for RASTR
     ```bash
     conda create --name RASTR python=3.9 scipy cupy numpy matplotlib tk pandas mrcfile setuptools -c conda-forge
+
+    # cudatoolkit can be either installed by conda or pip or following nvidia official website. Make sure cuda version is not newer than your nvidia driver.
     ```
 
 ### installation

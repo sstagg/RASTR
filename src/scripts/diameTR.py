@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-
+import logging
 import cupy as cp
 from cupyx.scipy.ndimage import gaussian_filter
 from cupyx.scipy.signal import correlate
@@ -13,6 +13,7 @@ from matplotlib import pyplot
 import math
 from src.common.starparse import StarFile
 from src.common.mrc_utils import readslice, get_average_power, correct_image
+from src.common.volume_utils import rotate_image, low_pass_filter, image_bin, rotate_image_3dto2d
 import pandas as pd
 
 
@@ -57,7 +58,7 @@ def find_psi( starfile, psi_optimizer, model_2d=None, mode='full' ):
 			#print(f"{line_number+1}, angle_max: {angle_max}, star: {particles_df.loc[line_number, '_rlnAnglePsi']}")
 	print(f'{particle_number} /{particle_number}')
 	logger.info("psi determination done        ")
-	logger.info("time for psi finding: ", time.time() - start_time)
+	logger.info(f"time for psi finding: {time.time() - start_time}")
 
 	return angle_maxs.get()
 
@@ -478,42 +479,42 @@ def parseOptions():
 
 
 def setup_logger(output_rootname):
-    """Set up the logger for the script."""
-    log_file = f"{output_rootname}_log.txt"
-    
-    # Create logger
-    logger = logging.getLogger('RASTR')
-    logger.setLevel(logging.INFO)
-    
-    # Create file handler
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)
-    
-    # Create console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    
-    # Create formatter and add it to the handlers
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-    
-    # Add handlers to logger
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    
-    return logger
+	"""Set up the logger for the script."""
+	log_file = f"{output_rootname}_log.txt"
+	
+	# Create logger
+	logger = logging.getLogger('RASTR')
+	logger.setLevel(logging.INFO)
+	
+	# Create file handler
+	file_handler = logging.FileHandler(log_file)
+	file_handler.setLevel(logging.INFO)
+	
+	# Create console handler
+	console_handler = logging.StreamHandler()
+	console_handler.setLevel(logging.INFO)
+	
+	# Create formatter and add it to the handlers
+	formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+	file_handler.setFormatter(formatter)
+	console_handler.setFormatter(formatter)
+	
+	# Add handlers to logger
+	logger.addHandler(file_handler)
+	logger.addHandler(console_handler)
+	
+	return logger
 
 def log_parameters(logger, args_dict, stage="input", **kwargs):
-    """Log input arguments or optimized parameters."""
-    if stage == "input":
-        logger.info("Input arguments:")
-        for arg, value in args_dict.items():
-            logger.info(f"  {arg}: {value}")
-    else:
-        logger.info(f"Optimized parameters for {stage}:")
-        for param, value in kwargs.items():
-            logger.info(f"  {param}: {value}")
+	"""Log input arguments or optimized parameters."""
+	if stage == "input":
+		logger.info("Input arguments:")
+		for arg, value in args_dict.items():
+			logger.info(f"  {arg}: {value}")
+	else:
+		logger.info(f"Optimized parameters for {stage}:")
+		for param, value in kwargs.items():
+			logger.info(f"  {param}: {value}")
 
 
 def main():
@@ -541,6 +542,7 @@ def main():
 		model = mrcfile.read(results.model)
 		model = cp.asarray(model)
 		if model.ndim == 3:
+			from src.common.volume_utils import project_volume
 			model_3d = model
 			model_2d = project_volume ( volume=model_3d, rot=0, tilt=90, psi=0, order=3 )	
 			logger.info("Model is 3D, projecting to 2D")
@@ -558,7 +560,7 @@ def main():
 		
 	particles_df = starfile.particles_df
 
-	
+	global pixel_size
 	pixel_size = float(optics_df.loc[0,'_rlnImagePixelSize'])
 	logger.info(f"Pixel size: {pixel_size} A/pixel")
 
@@ -615,18 +617,16 @@ def main():
 			starfile.particles_df['_rlndiameTR'] = diameters_df['_rlndiameTR']
 		else:
 			starfile.particles_df = pd.concat([particles_df, diameters_df], axis=1)
-		threshold_window = choose_threshold_window( starfile.particles_df )
-		starfile.particles_df = threshold_window.particles_df
 
-        # Log diameter statistics
-        if '_rlndiameTR' in starfile.particles_df.columns:
-            diameter_stats = {
-                'mean': starfile.particles_df['_rlndiameTR'].mean(),
-                'std': starfile.particles_df['_rlndiameTR'].std(),
-                'min': starfile.particles_df['_rlndiameTR'].min(),
-                'max': starfile.particles_df['_rlndiameTR'].max()
-            }
-            log_parameters(logger, {}, stage="diameter statistics", **diameter_stats)
+		# Log diameter statistics
+		if '_rlndiameTR' in starfile.particles_df.columns:
+			diameter_stats = {
+				'mean': starfile.particles_df['_rlndiameTR'].mean(),
+				'std': starfile.particles_df['_rlndiameTR'].std(),
+				'min': starfile.particles_df['_rlndiameTR'].min(),
+				'max': starfile.particles_df['_rlndiameTR'].max()
+			}
+			log_parameters(logger, {}, stage="diameter statistics", **diameter_stats)
 
 
 	if results.minimize_shift:

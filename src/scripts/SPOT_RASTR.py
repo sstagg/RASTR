@@ -2,7 +2,9 @@
 
 from src.scripts.diameTR import main
 import src.scripts.diameTR
-
+from scipy.signal import find_peaks
+import cupy as cp
+import numpy as np
 
 # Find the highest two peaks. min_gap defines the minimum distance of this two peaks
 # Best for GalCer tubules
