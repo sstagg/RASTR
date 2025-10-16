@@ -119,7 +119,7 @@ Have your particle stack and star file ready.
 
 - Determine psi angles
     ```bash
-    diameTR --i particles.tar --o particles_p -p
+    diameTR --i particles.star --o particles_p -p
     ```
 
     A optimiser window will pop up.
