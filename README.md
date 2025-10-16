@@ -186,7 +186,7 @@ SPOT-RASTR
 - Esfahani, B. G., Randolph, P. S., Peng, R., Grant, T., Stroupe, M. E., & Stagg, S. M. (2024). SPOT-RASTR—A cryo-EM specimen preparation technique that overcomes problems with preferred orientation and the air/water interface. PNAS Nexus, 3(8), 284. https://doi.org/10.1093/pnasnexus/pgae284
 
 diameTR
-- Peng, R., Elkhaligy, H., Grant, T., Stagg, S.M. (2025). DiameTR: A cryo-EM tool for diameter sorting of tubular samples. Submitted.
+- Peng, R., Elkhaligy, H., Grant, T., & Stagg, S. M. (2025). DiameTR: A cryo-EM tool for diameter sorting of tubular samples. Journal of Structural Biology: X, 12, 100136. https://doi.org/10.1016/j.yjsbx.2025.100136
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
